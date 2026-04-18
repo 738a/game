@@ -676,9 +676,10 @@ function leaveRoom() {
 function onConnected() {
   if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
   init();
-  $('netInfo').hidden = false;
   updateNetInfo(true);
   showScreen('game');
+  const myColor = myRole === 1 ? '⚫ 黒' : '⚪ 白';
+  toast(`接続完了 — あなたは ${myColor}`, 3500);
 }
 
 function onDisconnected() {
@@ -690,16 +691,17 @@ function onDisconnected() {
 
 function updateNetInfo(connected) {
   if (mode === 'offline') return;
-  const ns = $('netStatus');
+  const netInfo = $('netInfo');
   if (connected) {
-    ns.textContent = '🟢 接続中';
-    ns.classList.remove('disconnected');
+    // 接続が確立したら入室関連の表示は隠す
+    netInfo.hidden = true;
   } else {
+    netInfo.hidden = false;
+    const ns = $('netStatus');
     ns.textContent = '⚠️ 相手が切断しました';
     ns.classList.add('disconnected');
+    $('myRoleDisplay').textContent = '';
   }
-  const myColor = myRole === 1 ? '⚫ 黒' : '⚪ 白';
-  $('myRoleDisplay').textContent = `あなた: ${myColor}`;
 }
 
 // ============================================================
@@ -926,7 +928,8 @@ function copyText(text, successMsg) {
   }
 }
 
-function toast(msg) {
+function toast(msg, duration) {
+  const ms = duration || 1500;
   const t = document.createElement('div');
   t.className = 'toast';
   t.textContent = msg;
@@ -935,7 +938,7 @@ function toast(msg) {
   setTimeout(() => {
     t.classList.remove('show');
     setTimeout(() => t.remove(), 300);
-  }, 1500);
+  }, ms);
 }
 
 // ============================================================
