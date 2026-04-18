@@ -539,7 +539,7 @@
 </div>
 
 <script type="module">
-import { joinRoom } from 'https://esm.run/trystero@0.21.8/nostr';
+import { joinRoom } from 'https://esm.run/trystero@0.21.8/mqtt';
 
 // ============================================================
 // STATE
@@ -619,7 +619,7 @@ function generateRoomCode() {
 // ============================================================
 function setupRoom(code) {
   leaveTrysteroRoom();
-  log(`ルーム参加開始: ${code} (戦略: Nostr)`);
+  log(`ルーム参加開始: ${code} (戦略: MQTT)`);
   try {
     room = joinRoom({ appId: APP_ID }, code);
     log('joinRoom() 成功 — シグナリング待機中');
@@ -650,99 +650,6 @@ function setupRoom(code) {
     doUndo(true);
   });
 
-
-
-
-
-
-
-
-
-
-
-
-
-  <script type="module">
-import { joinRoom, getRelaySockets } from 'https://esm.run/@trystero-p2p/mqtt@0.23.0';
-
-const APP_ID = 'rttymk-yonmoku-2026-04';
-
-// 単一ブローカーに固定
-const RELAY_URLS = [
-  'wss://broker.emqx.io:8084/mqtt'
-];
-
-function attachRelayDebug() {
-  const sockets = getRelaySockets();
-
-  Object.entries(sockets).forEach(([url, ws]) => {
-    log(`relay socket 検出: ${url} state=${ws.readyState}`);
-
-    ws.addEventListener('open', () => {
-      log(`relay open: ${url}`);
-    }, { once: true });
-
-    ws.addEventListener('error', () => {
-      log(`relay error: ${url}`);
-    });
-
-    ws.addEventListener('close', ev => {
-      log(`relay close: ${url} code=${ev.code} reason=${ev.reason || '(none)'}`);
-    });
-  });
-}
-
-function setupRoom(code) {
-  leaveTrysteroRoom();
-  log(`ルーム参加開始: ${code} (戦略: MQTT / 固定ブローカー)`);
-
-  try {
-    room = joinRoom(
-      {
-        appId: APP_ID,
-        relayUrls: RELAY_URLS,
-        relayRedundancy: 1,
-        trickleIce: true
-      },
-      code,
-      {
-        onJoinError: details => {
-          log(`❌ onJoinError: ${details?.error?.message || details?.error || 'unknown'}`);
-        }
-      }
-    );
-
-    log('joinRoom() 成功 — relay 接続待機中');
-    setTimeout(attachRelayDebug, 0);
-  } catch (e) {
-    console.error('joinRoom failed:', e);
-    log('❌ joinRoom 失敗: ' + (e?.message || e));
-    return false;
-  }
-
-  const [sendMove, onMove] = room.makeAction('move');
-  const [sendReset, onReset] = room.makeAction('reset');
-  const [sendUndo, onUndo] = room.makeAction('undo');
-  actions = { sendMove, sendReset, sendUndo };
-
-  onMove((data, peerId) => {
-    if (peerId !== partnerPeerId) return;
-    if (data && typeof data.row === 'number' && typeof data.col === 'number') {
-      doMove(data.row, data.col, true);
-    }
-  });
-
-  onReset((_, peerId) => {
-    if (peerId !== partnerPeerId) return;
-    init();
-    hideModal();
-  });
-
-  onUndo((_, peerId) => {
-    if (peerId !== partnerPeerId) return;
-    doUndo(true);
-  });
-
   room.onPeerJoin(peerId => {
     log(`✓ ピア発見: ${peerId.slice(0, 8)}…`);
     if (partnerPeerId === null) {
@@ -761,14 +668,6 @@ function setupRoom(code) {
 
   return true;
 }
-</script>
-
-
-
-
-
-
-
 
 function leaveTrysteroRoom() {
   if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
