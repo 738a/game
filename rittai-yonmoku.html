@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0f0c29">
+<title>立体四目</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  *, *::before, *::after {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+  html, body {
+    overflow-x: hidden;
+    overscroll-behavior: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Meiryo', sans-serif;
+  }
+  body {
+    background: linear-gradient(160deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    min-height: 100dvh;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: max(10px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .header {
+    width: 100%;
+    max-width: 480px;
+    text-align: center;
+    padding: 4px 0 10px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    background: linear-gradient(90deg, #ffffff 0%, #b8c5ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 18px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px;
+    font-size: 15px;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    margin: 0 auto 12px;
+    transition: all 0.3s;
+    min-height: 44px;
+  }
+  .turn-indicator {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    transition: all 0.3s;
+    flex-shrink: 0;
+  }
+  .piece-black {
+    background: radial-gradient(circle at 32% 28%, #6b6b8e 0%, #2a2a3e 50%, #0a0a14 100%);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.4),
+      inset 0 -2px 4px rgba(0,0,0,0.5);
+  }
+  .piece-white {
+    background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e8e8f0 50%, #b8b8c8 100%);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.3),
+      inset 0 -2px 4px rgba(0,0,0,0.15);
+  }
+
+  .boards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    max-width: 440px;
+  }
+  @media (min-width: 760px) {
+    .boards {
+      grid-template-columns: repeat(4, 1fr);
+      max-width: 820px;
+      gap: 12px;
+    }
+  }
+
+  .board-container {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    padding: 8px 8px 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .board-label {
+    font-size: 11px;
+    text-align: center;
+    margin-bottom: 6px;
+    color: rgba(255,255,255,0.55);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .board {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    aspect-ratio: 1;
+  }
+  .cell {
+    background: rgba(255,255,255,0.06);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .cell.tappable { cursor: pointer; }
+  .cell.tappable:active {
+    background: rgba(255,255,255,0.18);
+    transform: scale(0.92);
+  }
+  .cell .piece {
+    width: 80%;
+    height: 80%;
+    border-radius: 50%;
+  }
+  .cell .piece.fresh {
+    animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes pop {
+    0%   { transform: scale(0) translateY(-30%); opacity: 0; }
+    60%  { transform: scale(1.12) translateY(0); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .cell.next-drop::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 5px;
+    border: 2px dashed rgba(255,215,0,0.55);
+    pointer-events: none;
+    animation: glow 1.8s ease-in-out infinite;
+  }
+  @keyframes glow {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 0.9; }
+  }
+  .cell.winning {
+    background: rgba(255,215,0,0.28);
+    box-shadow: 0 0 12px rgba(255,215,0,0.6), inset 0 0 0 2px rgba(255,215,0,0.85);
+    animation: winPulse 1s ease-in-out infinite;
+  }
+  @keyframes winPulse {
+    0%, 100% { box-shadow: 0 0 12px rgba(255,215,0,0.55), inset 0 0 0 2px rgba(255,215,0,0.85); }
+    50%      { box-shadow: 0 0 24px rgba(255,215,0,0.95), inset 0 0 0 2px rgba(255,215,0,1); }
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    width: 100%;
+    max-width: 440px;
+    justify-content: center;
+  }
+  button {
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.08);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 46px;
+    transition: all 0.15s;
+    flex: 1;
+    font-family: inherit;
+  }
+  button:active {
+    transform: scale(0.96);
+    background: rgba(255,255,255,0.18);
+  }
+  button.primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-color: transparent;
+  }
+
+  .info {
+    font-size: 11px;
+    color: rgba(255,255,255,0.42);
+    text-align: center;
+    margin-top: 14px;
+    line-height: 1.7;
+    max-width: 440px;
+    padding: 0 8px;
+  }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .modal-content {
+    background: linear-gradient(160deg, #2d2867 0%, #1a1a3e 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 28px 24px;
+    border-radius: 18px;
+    text-align: center;
+    max-width: 280px;
+    width: 100%;
+    transform: scale(0.85);
+    transition: transform 0.25s;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  .modal.show .modal-content { transform: scale(1); }
+  .winner-piece {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    margin: 0 auto 14px;
+  }
+  .winner-text {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 18px;
+  }
+  .modal-buttons { display: flex; gap: 8px; }
+  .modal-buttons button { flex: 1; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>立体四目</h1>
+  </div>
+
+  <div class="status" id="status">
+    <div class="turn-indicator piece-black" id="turnIndicator"></div>
+    <span id="statusText">黒の番</span>
+  </div>
+
+  <div class="boards" id="boards"></div>
+
+  <div class="controls">
+    <button class="primary" id="newGameBtn">新しい対局</button>
+    <button id="undoBtn">一手戻す</button>
+  </div>
+
+  <div class="info">
+    縦・横・斜め・立体斜めに <b>4つ並べたら勝ち</b><br>
+    黄色い枠のマスをタップして駒を置きます
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="modal-content">
+      <div class="winner-piece" id="winnerPiece"></div>
+      <div class="winner-text" id="winnerText"></div>
+      <div class="modal-buttons">
+        <button id="modalCloseBtn">盤面を見る</button>
+        <button class="primary" id="modalNewBtn">もう一度</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function() {
+  // board[layer][row][col]: 0 = empty, 1 = black, 2 = white
+  // layer 0 = bottom (1階), layer 3 = top (4階)
+  let board, currentPlayer, gameOver, history, winningLine;
+
+  function init() {
+    board = Array.from({length:4}, () =>
+      Array.from({length:4}, () =>
+        Array(4).fill(0)));
+    currentPlayer = 1;
+    gameOver = false;
+    history = [];
+    winningLine = null;
+    render();
+    updateStatus();
+  }
+
+  function newGame() {
+    init();
+    hideModal();
+  }
+
+  function undo() {
+    if (history.length === 0) return;
+    if (gameOver) {
+      gameOver = false;
+      winningLine = null;
+    }
+    const last = history.pop();
+    board[last.l][last.r][last.c] = 0;
+    currentPlayer = currentPlayer === 1 ? 2 : 1;
+    render();
+    updateStatus();
+  }
+
+  function dropPiece(row, col) {
+    if (gameOver) return;
+    for (let l = 0; l < 4; l++) {
+      if (board[l][row][col] === 0) {
+        board[l][row][col] = currentPlayer;
+        history.push({l, r: row, c: col});
+        const win = checkWin(l, row, col);
+        if (win) {
+          winningLine = win;
+          gameOver = true;
+          render();
+          setTimeout(() => showWinner(currentPlayer), 900);
+          return;
+        }
+        if (isFull()) {
+          gameOver = true;
+          render();
+          setTimeout(showDraw, 500);
+          return;
+        }
+        currentPlayer = currentPlayer === 1 ? 2 : 1;
+        render();
+        updateStatus();
+        return;
+      }
+    }
+  }
+
+  function isFull() {
+    for (let l = 0; l < 4; l++)
+      for (let r = 0; r < 4; r++)
+        for (let c = 0; c < 4; c++)
+          if (board[l][r][c] === 0) return false;
+    return true;
+  }
+
+  // 13 unique direction vectors in 3D
+  const DIRECTIONS = [
+    [1,0,0], [0,1,0], [0,0,1],
+    [1,1,0], [1,-1,0], [1,0,1], [1,0,-1], [0,1,1], [0,1,-1],
+    [1,1,1], [1,1,-1], [1,-1,1], [1,-1,-1]
+  ];
+
+  function checkWin(l, r, c) {
+    const player = board[l][r][c];
+    if (player === 0) return null;
+    for (const [dl, dr, dc] of DIRECTIONS) {
+      const line = [{l, r, c}];
+      for (let i = 1; i < 4; i++) {
+        const nl=l+dl*i, nr=r+dr*i, nc=c+dc*i;
+        if (nl<0||nl>3||nr<0||nr>3||nc<0||nc>3) break;
+        if (board[nl][nr][nc] !== player) break;
+        line.push({l:nl,r:nr,c:nc});
+      }
+      for (let i = 1; i < 4; i++) {
+        const nl=l-dl*i, nr=r-dr*i, nc=c-dc*i;
+        if (nl<0||nl>3||nr<0||nr>3||nc<0||nc>3) break;
+        if (board[nl][nr][nc] !== player) break;
+        line.push({l:nl,r:nr,c:nc});
+      }
+      if (line.length >= 4) return line;
+    }
+    return null;
+  }
+
+  function getDropLayer(row, col) {
+    for (let l = 0; l < 4; l++) {
+      if (board[l][row][col] === 0) return l;
+    }
+    return -1;
+  }
+
+  function render() {
+    const container = document.getElementById('boards');
+    container.innerHTML = '';
+    const lastMove = history[history.length - 1];
+    const order = [0, 1, 2, 3];
+    for (const l of order) {
+      const wrap = document.createElement('div');
+      wrap.className = 'board-container';
+      const label = document.createElement('div');
+      label.className = 'board-label';
+      label.textContent = `${l+1}階` + (l === 0 ? '(一番下)' : l === 3 ? '(一番上)' : '');
+      wrap.appendChild(label);
+      const grid = document.createElement('div');
+      grid.className = 'board';
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          const val = board[l][r][c];
+          const drop = getDropLayer(r, c);
+          if (val !== 0) {
+            const piece = document.createElement('div');
+            piece.className = 'piece ' + (val === 1 ? 'piece-black' : 'piece-white');
+            if (lastMove && lastMove.l === l && lastMove.r === r && lastMove.c === c) {
+              piece.classList.add('fresh');
+            }
+            cell.appendChild(piece);
+          }
+          if (winningLine && winningLine.some(p => p.l===l && p.r===r && p.c===c)) {
+            cell.classList.add('winning');
+          }
+          if (!gameOver && drop === l) {
+            cell.classList.add('next-drop');
+            cell.classList.add('tappable');
+            cell.addEventListener('click', () => dropPiece(r, c));
+          }
+          grid.appendChild(cell);
+        }
+      }
+      wrap.appendChild(grid);
+      container.appendChild(wrap);
+    }
+  }
+
+  function updateStatus() {
+    const ind = document.getElementById('turnIndicator');
+    const txt = document.getElementById('statusText');
+    ind.className = 'turn-indicator ' + (currentPlayer === 1 ? 'piece-black' : 'piece-white');
+    txt.textContent = currentPlayer === 1 ? '黒の番' : '白の番';
+  }
+
+  function showWinner(player) {
+    const piece = document.getElementById('winnerPiece');
+    const text = document.getElementById('winnerText');
+    piece.className = 'winner-piece ' + (player === 1 ? 'piece-black' : 'piece-white');
+    piece.style.background = '';
+    text.textContent = (player === 1 ? '黒' : '白') + 'の勝ち！';
+    document.getElementById('modal').classList.add('show');
+  }
+
+  function showDraw() {
+    const piece = document.getElementById('winnerPiece');
+    piece.className = 'winner-piece';
+    piece.style.background = 'linear-gradient(135deg, #888, #444)';
+    document.getElementById('winnerText').textContent = '引き分け';
+    document.getElementById('modal').classList.add('show');
+  }
+
+  function hideModal() {
+    document.getElementById('modal').classList.remove('show');
+  }
+
+  document.getElementById('newGameBtn').addEventListener('click', newGame);
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('modalNewBtn').addEventListener('click', newGame);
+  document.getElementById('modalCloseBtn').addEventListener('click', hideModal);
+  document.getElementById('modal').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) hideModal();
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>
