@@ -145,6 +145,7 @@
   }
   .button-row { display: flex; gap: 8px; margin-bottom: 8px; }
   .button-row button { flex: 1; }
+  .elapsed { color: rgba(255,255,255,0.45); font-size: 13px; font-weight: 400; margin-left: 4px; }
   .loading-dots {
     display: inline-flex;
     gap: 6px;
@@ -445,7 +446,7 @@
 <div id="waitingScreen" class="screen" hidden>
   <div class="card">
     <div class="loading-dots"><span></span><span></span><span></span></div>
-    <h2 style="font-size:18px;font-weight:600;margin-bottom:6px;">相手を待っています</h2>
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:6px;">相手を待っています<span class="elapsed" id="waitElapsed"></span></h2>
     <p class="subtitle" style="margin-bottom:0">下のコードかリンクを相手に送ってください</p>
     <div class="room-code-display" id="roomCodeDisplay">------</div>
     <div class="button-row">
@@ -460,7 +461,7 @@
 <div id="connectingScreen" class="screen" hidden>
   <div class="card">
     <div class="loading-dots"><span></span><span></span><span></span></div>
-    <h2 style="font-size:18px;font-weight:600;">接続中…</h2>
+    <h2 style="font-size:18px;font-weight:600;">接続中…<span class="elapsed" id="joinElapsed"></span></h2>
     <p class="subtitle" style="margin-bottom:14px;margin-top:6px;">相手を探しています</p>
     <button class="text-btn" id="cancelJoinBtn">キャンセル</button>
   </div>
@@ -502,7 +503,7 @@
 </div>
 
 <script type="module">
-import { joinRoom } from 'https://esm.run/trystero@0.21.8';
+import { joinRoom } from 'https://esm.run/trystero@0.21.8/torrent';
 
 // ============================================================
 // STATE
@@ -514,6 +515,8 @@ let room = null;
 let actions = {};
 let partnerPeerId = null;
 let joinTimeout = null;
+let elapsedTimer = null;
+let elapsedSec = 0;
 let roomCode = null;
 
 const APP_ID = 'rttymk-yonmoku-2026-04';
@@ -532,6 +535,23 @@ function showScreen(name) {
 }
 
 function setConnectError(msg) { $('connectError').textContent = msg || ''; }
+
+function startElapsed() {
+  stopElapsed();
+  elapsedSec = 0;
+  elapsedTimer = setInterval(() => {
+    elapsedSec++;
+    document.querySelectorAll('.elapsed').forEach(el => {
+      el.textContent = ` (${elapsedSec}秒)`;
+    });
+  }, 1000);
+}
+
+function stopElapsed() {
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  elapsedSec = 0;
+  document.querySelectorAll('.elapsed').forEach(el => el.textContent = '');
+}
 
 // ============================================================
 // ROOM CODE
@@ -597,6 +617,7 @@ function setupRoom(code) {
 
 function leaveTrysteroRoom() {
   if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
+  stopElapsed();
   if (room) {
     try { room.leave(); } catch (e) {}
     room = null;
@@ -626,7 +647,9 @@ function createRoom() {
   myRole = 1;
   $('roomCodeDisplay').textContent = code;
   showScreen('waiting');
+  startElapsed();
   if (!setupRoom(code)) {
+    stopElapsed();
     setConnectError('ネットワーク初期化に失敗しました');
     showScreen('connect');
   }
@@ -643,19 +666,22 @@ function joinRoomAsGuest(codeArg) {
   mode = 'guest';
   myRole = 2;
   showScreen('connecting');
+  startElapsed();
   if (!setupRoom(code)) {
+    stopElapsed();
     setConnectError('ネットワーク初期化に失敗しました');
     showScreen('connect');
     return;
   }
   joinTimeout = setTimeout(() => {
     if (partnerPeerId === null) {
+      stopElapsed();
       leaveTrysteroRoom();
       mode = null; myRole = null;
       setConnectError('ルームが見つかりません。コードを確認するか、相手が「ルームを作る」を押しているか確認してください。');
       showScreen('connect');
     }
-  }, 15000);
+  }, 30000);
 }
 
 function startOffline() {
@@ -675,6 +701,7 @@ function leaveRoom() {
 
 function onConnected() {
   if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
+  stopElapsed();
   init();
   updateNetInfo(true);
   showScreen('game');
