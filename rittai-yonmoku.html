@@ -539,7 +539,7 @@
 </div>
 
 <script type="module">
-import { joinRoom } from 'https://esm.run/trystero@0.21.8/mqtt';
+import { joinRoom } from 'https://esm.run/trystero@0.21.8/nostr';
 
 // ============================================================
 // STATE
@@ -619,7 +619,7 @@ function generateRoomCode() {
 // ============================================================
 function setupRoom(code) {
   leaveTrysteroRoom();
-  log(`ルーム参加開始: ${code} (戦略: MQTT)`);
+  log(`ルーム参加開始: ${code} (戦略: Nostr)`);
   try {
     room = joinRoom({ appId: APP_ID }, code);
     log('joinRoom() 成功 — シグナリング待機中');
