@@ -146,6 +146,34 @@
   .button-row { display: flex; gap: 8px; margin-bottom: 8px; }
   .button-row button { flex: 1; }
   .elapsed { color: rgba(255,255,255,0.45); font-size: 13px; font-weight: 400; margin-left: 4px; }
+
+  details.debug {
+    margin-top: 14px;
+    text-align: left;
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+  }
+  details.debug summary {
+    cursor: pointer;
+    text-align: center;
+    color: rgba(255,255,255,0.4);
+    padding: 4px;
+    list-style: none;
+  }
+  details.debug summary::-webkit-details-marker { display: none; }
+  details.debug pre {
+    background: rgba(0,0,0,0.3);
+    padding: 8px;
+    border-radius: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+    font-size: 10px;
+    line-height: 1.5;
+    margin-top: 6px;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: 'SF Mono', 'Menlo', monospace;
+  }
   .loading-dots {
     display: inline-flex;
     gap: 6px;
@@ -454,6 +482,10 @@
       <button id="copyLinkBtn">リンクをコピー</button>
     </div>
     <button class="text-btn" id="cancelBtn">キャンセル</button>
+    <details class="debug">
+      <summary>詳細ログ</summary>
+      <pre class="debug-log"></pre>
+    </details>
   </div>
 </div>
 
@@ -464,6 +496,10 @@
     <h2 style="font-size:18px;font-weight:600;">接続中…<span class="elapsed" id="joinElapsed"></span></h2>
     <p class="subtitle" style="margin-bottom:14px;margin-top:6px;">相手を探しています</p>
     <button class="text-btn" id="cancelJoinBtn">キャンセル</button>
+    <details class="debug">
+      <summary>詳細ログ</summary>
+      <pre class="debug-log"></pre>
+    </details>
   </div>
 </div>
 
@@ -503,7 +539,7 @@
 </div>
 
 <script type="module">
-import { joinRoom } from 'https://esm.run/trystero@0.21.8/torrent';
+import { joinRoom } from 'https://esm.run/trystero@0.21.8/mqtt';
 
 // ============================================================
 // STATE
@@ -553,6 +589,20 @@ function stopElapsed() {
   document.querySelectorAll('.elapsed').forEach(el => el.textContent = '');
 }
 
+function log(msg) {
+  const time = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+  const line = `[${time}] ${msg}\n`;
+  document.querySelectorAll('.debug-log').forEach(el => {
+    el.textContent += line;
+    el.scrollTop = el.scrollHeight;
+  });
+  console.log('[ritai]', msg);
+}
+
+function clearLog() {
+  document.querySelectorAll('.debug-log').forEach(el => { el.textContent = ''; });
+}
+
 // ============================================================
 // ROOM CODE
 // ============================================================
@@ -569,10 +619,13 @@ function generateRoomCode() {
 // ============================================================
 function setupRoom(code) {
   leaveTrysteroRoom();
+  log(`ルーム参加開始: ${code} (戦略: MQTT)`);
   try {
     room = joinRoom({ appId: APP_ID }, code);
+    log('joinRoom() 成功 — シグナリング待機中');
   } catch (e) {
     console.error('joinRoom failed:', e);
+    log('❌ joinRoom 失敗: ' + (e && e.message || e));
     return false;
   }
 
@@ -598,14 +651,15 @@ function setupRoom(code) {
   });
 
   room.onPeerJoin(peerId => {
+    log(`✓ ピア発見: ${peerId.slice(0, 8)}…`);
     if (partnerPeerId === null) {
       partnerPeerId = peerId;
       onConnected();
     }
-    // 既に partner が居る場合は無視（=3人目以降は無視）
   });
 
   room.onPeerLeave(peerId => {
+    log(`× ピア退出: ${peerId.slice(0, 8)}…`);
     if (peerId === partnerPeerId) {
       partnerPeerId = null;
       onDisconnected();
@@ -641,6 +695,7 @@ function send(msg) {
 
 function createRoom() {
   setConnectError('');
+  clearLog();
   const code = generateRoomCode();
   roomCode = code;
   mode = 'host';
@@ -648,6 +703,7 @@ function createRoom() {
   $('roomCodeDisplay').textContent = code;
   showScreen('waiting');
   startElapsed();
+  log(`ホストとして部屋を作成: ${code}`);
   if (!setupRoom(code)) {
     stopElapsed();
     setConnectError('ネットワーク初期化に失敗しました');
@@ -657,6 +713,7 @@ function createRoom() {
 
 function joinRoomAsGuest(codeArg) {
   setConnectError('');
+  clearLog();
   const code = (codeArg || $('codeInput').value || '').trim().toUpperCase();
   if (!code || code.length < 4) {
     setConnectError('ルームコードを入力してください');
@@ -667,6 +724,7 @@ function joinRoomAsGuest(codeArg) {
   myRole = 2;
   showScreen('connecting');
   startElapsed();
+  log(`ゲストとして参加試行: ${code}`);
   if (!setupRoom(code)) {
     stopElapsed();
     setConnectError('ネットワーク初期化に失敗しました');
@@ -675,6 +733,7 @@ function joinRoomAsGuest(codeArg) {
   }
   joinTimeout = setTimeout(() => {
     if (partnerPeerId === null) {
+      log('⏱ タイムアウト (30秒) — ピア未発見');
       stopElapsed();
       leaveTrysteroRoom();
       mode = null; myRole = null;
@@ -1004,6 +1063,7 @@ $('modal').addEventListener('click', (e) => {
 window.addEventListener('beforeunload', leaveTrysteroRoom);
 
 // 初期表示: URL に ?room=XXX があれば自動参加
+log('ライブラリ読み込み完了');
 const urlParams = new URLSearchParams(window.location.search);
 const roomFromUrl = urlParams.get('room');
 if (roomFromUrl) {
