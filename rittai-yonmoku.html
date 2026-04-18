@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f0c29">
 <title>立体四目</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   *, *::before, *::after {
@@ -30,11 +31,152 @@
     padding: max(10px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
   }
 
+  /* ============ Connect / Waiting screens ============ */
+  .screen {
+    width: 100%;
+    max-width: 380px;
+    margin: auto 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 32px 24px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    text-align: center;
+  }
+  .card h1.brand {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    background: linear-gradient(90deg, #fff, #b8c5ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 6px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 24px;
+  }
+  .or-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: rgba(255,255,255,0.35);
+    font-size: 12px;
+  }
+  .or-divider::before, .or-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255,255,255,0.12);
+  }
+  .join-row {
+    display: flex;
+    gap: 8px;
+  }
+  .join-row input {
+    flex: 1;
+    padding: 12px 14px;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #fff;
+    border-radius: 12px;
+    font-size: 18px;
+    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+    letter-spacing: 0.15em;
+    text-align: center;
+    min-width: 0;
+    outline: none;
+  }
+  .join-row input:focus {
+    border-color: rgba(118, 75, 162, 0.8);
+  }
+  .join-row input::placeholder {
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0;
+    font-family: inherit;
+  }
+  .error-text {
+    color: #ff8b8b;
+    font-size: 12px;
+    margin-top: 12px;
+    min-height: 16px;
+  }
+  .footer-link {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+  .text-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: underline;
+    padding: 8px;
+    width: auto;
+    min-height: auto;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .text-btn:active { color: rgba(255,255,255,0.85); }
+  .room-code-display {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    background: rgba(255,255,255,0.1);
+    padding: 18px 8px 18px 32px;
+    border-radius: 12px;
+    margin: 18px 0 10px;
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .hint {
+    font-size: 12px;
+    color: rgba(255,255,255,0.5);
+    margin-bottom: 18px;
+  }
+  .button-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .button-row button { flex: 1; }
+  .loading-dots {
+    display: inline-flex;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .loading-dots span {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
+    40% { transform: scale(1.2); opacity: 1; }
+  }
+
+  /* ============ Game screen ============ */
   .header {
     width: 100%;
     max-width: 480px;
     text-align: center;
-    padding: 4px 0 10px;
+    padding: 4px 0 8px;
   }
   h1 {
     font-size: 22px;
@@ -45,7 +187,6 @@
     background-clip: text;
     color: transparent;
   }
-
   .status {
     display: flex;
     align-items: center;
@@ -59,10 +200,20 @@
     font-weight: 600;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    margin: 0 auto 12px;
+    margin: 0 auto 8px;
     transition: all 0.3s;
     min-height: 44px;
   }
+  .net-info {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .net-status.disconnected { color: #ff8b8b; }
   .turn-indicator {
     width: 22px; height: 22px;
     border-radius: 50%;
@@ -71,17 +222,12 @@
   }
   .piece-black {
     background: radial-gradient(circle at 32% 28%, #6b6b8e 0%, #2a2a3e 50%, #0a0a14 100%);
-    box-shadow:
-      0 2px 4px rgba(0,0,0,0.4),
-      inset 0 -2px 4px rgba(0,0,0,0.5);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.5);
   }
   .piece-white {
     background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e8e8f0 50%, #b8b8c8 100%);
-    box-shadow:
-      0 2px 4px rgba(0,0,0,0.3),
-      inset 0 -2px 4px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 -2px 4px rgba(0,0,0,0.15);
   }
-
   .boards {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -96,12 +242,11 @@
       gap: 12px;
     }
   }
-
   .board-container {
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 14px;
-    padding: 8px 8px 8px;
+    padding: 8px;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
@@ -168,7 +313,6 @@
     0%, 100% { box-shadow: 0 0 12px rgba(255,215,0,0.55), inset 0 0 0 2px rgba(255,215,0,0.85); }
     50%      { box-shadow: 0 0 24px rgba(255,215,0,0.95), inset 0 0 0 2px rgba(255,215,0,1); }
   }
-
   .controls {
     display: flex;
     gap: 8px;
@@ -199,7 +343,10 @@
     background: linear-gradient(135deg, #667eea, #764ba2);
     border-color: transparent;
   }
-
+  button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
   .info {
     font-size: 11px;
     color: rgba(255,255,255,0.42);
@@ -210,6 +357,7 @@
     padding: 0 8px;
   }
 
+  /* ============ Modal ============ */
   .modal {
     position: fixed;
     inset: 0;
@@ -225,10 +373,7 @@
     pointer-events: none;
     transition: opacity 0.25s;
   }
-  .modal.show {
-    opacity: 1;
-    pointer-events: auto;
-  }
+  .modal.show { opacity: 1; pointer-events: auto; }
   .modal-content {
     background: linear-gradient(160deg, #2d2867 0%, #1a1a3e 100%);
     border: 1px solid rgba(255,255,255,0.15);
@@ -254,51 +399,311 @@
   }
   .modal-buttons { display: flex; gap: 8px; }
   .modal-buttons button { flex: 1; }
+
+  /* ============ Toast ============ */
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(0,0,0,0.85);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 200;
+    pointer-events: none;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 </style>
 </head>
 <body>
-  <div class="header">
-    <h1>立体四目</h1>
-  </div>
 
+<!-- ============ Connect screen ============ -->
+<div id="connectScreen" class="screen" hidden>
+  <div class="card">
+    <h1 class="brand">立体四目</h1>
+    <p class="subtitle">遠隔で2人対戦</p>
+    <button class="primary" id="createBtn">ルームを作る</button>
+    <div class="or-divider">または</div>
+    <div class="join-row">
+      <input id="codeInput" placeholder="ルームコード" autocomplete="off" autocapitalize="characters" maxlength="6" inputmode="text">
+      <button id="joinBtn" style="flex:0 0 80px">参加</button>
+    </div>
+    <div class="error-text" id="connectError"></div>
+    <div class="footer-link">
+      <button class="text-btn" id="offlineBtn">同じ端末で2人で遊ぶ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Waiting screen ============ -->
+<div id="waitingScreen" class="screen" hidden>
+  <div class="card">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+    <h2 style="font-size:18px;font-weight:600;margin-bottom:6px;">相手を待っています</h2>
+    <p class="subtitle" style="margin-bottom:0">下のコードかリンクを相手に送ってください</p>
+    <div class="room-code-display" id="roomCodeDisplay">------</div>
+    <div class="button-row">
+      <button id="copyCodeBtn">コードをコピー</button>
+      <button id="copyLinkBtn">リンクをコピー</button>
+    </div>
+    <button class="text-btn" id="cancelBtn">キャンセル</button>
+  </div>
+</div>
+
+<!-- ============ Connecting screen ============ -->
+<div id="connectingScreen" class="screen" hidden>
+  <div class="card">
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+    <h2 style="font-size:18px;font-weight:600;">接続中…</h2>
+  </div>
+</div>
+
+<!-- ============ Game screen ============ -->
+<div id="gameScreen" hidden style="width:100%;display:flex;flex-direction:column;align-items:center;">
+  <div class="header"><h1>立体四目</h1></div>
   <div class="status" id="status">
     <div class="turn-indicator piece-black" id="turnIndicator"></div>
     <span id="statusText">黒の番</span>
   </div>
-
+  <div class="net-info" id="netInfo" hidden>
+    <span class="net-status" id="netStatus">🟢 接続中</span>
+    <span id="myRoleDisplay"></span>
+  </div>
   <div class="boards" id="boards"></div>
-
   <div class="controls">
     <button class="primary" id="newGameBtn">新しい対局</button>
     <button id="undoBtn">一手戻す</button>
+    <button id="leaveBtn">退室</button>
   </div>
-
   <div class="info">
     縦・横・斜め・立体斜めに <b>4つ並べたら勝ち</b><br>
     黄色い枠のマスをタップして駒を置きます
   </div>
+</div>
 
-  <div class="modal" id="modal">
-    <div class="modal-content">
-      <div class="winner-piece" id="winnerPiece"></div>
-      <div class="winner-text" id="winnerText"></div>
-      <div class="modal-buttons">
-        <button id="modalCloseBtn">盤面を見る</button>
-        <button class="primary" id="modalNewBtn">もう一度</button>
-      </div>
+<!-- ============ Modal ============ -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <div class="winner-piece" id="winnerPiece"></div>
+    <div class="winner-text" id="winnerText"></div>
+    <div class="modal-buttons">
+      <button id="modalCloseBtn">盤面を見る</button>
+      <button class="primary" id="modalNewBtn">もう一度</button>
     </div>
   </div>
+</div>
 
 <script>
 (function() {
-  // board[layer][row][col]: 0 = empty, 1 = black, 2 = white
-  // layer 0 = bottom (1階), layer 3 = top (4階)
+  // ============================================================
+  // STATE
+  // ============================================================
   let board, currentPlayer, gameOver, history, winningLine;
+  let mode = null;       // 'host' | 'guest' | 'offline'
+  let myRole = null;     // 1 (black) | 2 (white) | null (offline)
+  let peer = null, conn = null;
+  let roomCode = null;
+  const ID_PREFIX = 'rttymk-';
 
+  const $ = id => document.getElementById(id);
+
+  // ============================================================
+  // SCREEN MANAGEMENT
+  // ============================================================
+  function showScreen(name) {
+    $('connectScreen').hidden = name !== 'connect';
+    $('waitingScreen').hidden = name !== 'waiting';
+    $('connectingScreen').hidden = name !== 'connecting';
+    $('gameScreen').hidden = name !== 'game';
+  }
+
+  function setConnectError(msg) { $('connectError').textContent = msg || ''; }
+
+  // ============================================================
+  // ROOM CODE
+  // ============================================================
+  function generateRoomCode() {
+    // Avoid confusing chars (0/O, 1/I)
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  // ============================================================
+  // NETWORKING
+  // ============================================================
+  function ensurePeerLib() {
+    if (typeof Peer === 'undefined') {
+      setConnectError('ライブラリ読み込みに失敗。回線を確認して再読み込みしてください。');
+      return false;
+    }
+    return true;
+  }
+
+  function createRoom() {
+    if (!ensurePeerLib()) return;
+    setConnectError('');
+    cleanupNetwork();
+    const code = generateRoomCode();
+    roomCode = code;
+    peer = new Peer(ID_PREFIX + code, { debug: 1 });
+
+    peer.on('open', () => {
+      mode = 'host';
+      myRole = 1;
+      $('roomCodeDisplay').textContent = code;
+      showScreen('waiting');
+    });
+
+    peer.on('connection', c => {
+      conn = c;
+      c.on('open', onConnected);
+      c.on('data', handleNetMessage);
+      c.on('close', onDisconnected);
+      c.on('error', err => console.error('Conn error:', err));
+    });
+
+    peer.on('error', err => {
+      console.error('Peer error:', err);
+      if (err.type === 'unavailable-id') {
+        // Code collision – try new one
+        try { peer.destroy(); } catch(e) {}
+        peer = null;
+        createRoom();
+      } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+        setConnectError('シグナリングサーバーに接続できません。少し時間をおいて再試行してください。');
+        cleanupNetwork();
+        showScreen('connect');
+      } else {
+        setConnectError('エラー: ' + (err.type || 'unknown'));
+        cleanupNetwork();
+        showScreen('connect');
+      }
+    });
+  }
+
+  function joinRoom(codeArg) {
+    if (!ensurePeerLib()) return;
+    setConnectError('');
+    const code = (codeArg || $('codeInput').value || '').trim().toUpperCase();
+    if (!code || code.length < 4) {
+      setConnectError('ルームコードを入力してください');
+      return;
+    }
+    cleanupNetwork();
+    roomCode = code;
+    showScreen('connecting');
+    peer = new Peer({ debug: 1 });
+
+    peer.on('open', () => {
+      const c = peer.connect(ID_PREFIX + code, { reliable: true });
+      conn = c;
+      c.on('open', () => {
+        mode = 'guest';
+        myRole = 2;
+        onConnected();
+      });
+      c.on('data', handleNetMessage);
+      c.on('close', onDisconnected);
+      c.on('error', err => console.error('Conn error:', err));
+    });
+
+    peer.on('error', err => {
+      console.error('Peer error:', err);
+      if (err.type === 'peer-unavailable') {
+        setConnectError('ルームが見つかりません: ' + code);
+      } else if (err.type === 'network' || err.type === 'server-error' || err.type === 'socket-error') {
+        setConnectError('シグナリングサーバーに接続できません。');
+      } else {
+        setConnectError('接続エラー: ' + (err.type || 'unknown'));
+      }
+      cleanupNetwork();
+      showScreen('connect');
+    });
+  }
+
+  function startOffline() {
+    cleanupNetwork();
+    mode = 'offline';
+    myRole = null;
+    init();
+    $('netInfo').hidden = true;
+    showScreen('game');
+  }
+
+  function cleanupNetwork() {
+    if (conn) { try { conn.close(); } catch(e) {} conn = null; }
+    if (peer) { try { peer.destroy(); } catch(e) {} peer = null; }
+  }
+
+  function leaveRoom() {
+    cleanupNetwork();
+    mode = null; myRole = null;
+    showScreen('connect');
+  }
+
+  function onConnected() {
+    init();
+    $('netInfo').hidden = false;
+    updateNetInfo(true);
+    showScreen('game');
+  }
+
+  function onDisconnected() {
+    if (mode === 'offline' || mode === null) return;
+    updateNetInfo(false);
+    gameOver = true;
+    render();
+  }
+
+  function updateNetInfo(connected) {
+    if (mode === 'offline') return;
+    const ns = $('netStatus');
+    if (connected) {
+      ns.textContent = '🟢 接続中';
+      ns.classList.remove('disconnected');
+    } else {
+      ns.textContent = '⚠️ 相手が切断しました';
+      ns.classList.add('disconnected');
+    }
+    const myColor = myRole === 1 ? '⚫ 黒' : '⚪ 白';
+    $('myRoleDisplay').textContent = `あなた: ${myColor}`;
+  }
+
+  // ============================================================
+  // NETWORK MESSAGES
+  // ============================================================
+  function send(msg) {
+    if (conn && conn.open) conn.send(msg);
+  }
+
+  function handleNetMessage(msg) {
+    if (!msg || typeof msg !== 'object') return;
+    if (msg.type === 'move') {
+      doMove(msg.row, msg.col, true);
+    } else if (msg.type === 'reset') {
+      init();
+      hideModal();
+    } else if (msg.type === 'undo') {
+      doUndo(true);
+    }
+  }
+
+  // ============================================================
+  // GAME LOGIC
+  // ============================================================
   function init() {
     board = Array.from({length:4}, () =>
-      Array.from({length:4}, () =>
-        Array(4).fill(0)));
+      Array.from({length:4}, () => Array(4).fill(0)));
     currentPlayer = 1;
     gameOver = false;
     history = [];
@@ -307,12 +712,15 @@
     updateStatus();
   }
 
-  function newGame() {
+  function newGameAction() {
     init();
     hideModal();
+    if (mode !== 'offline') send({type:'reset'});
   }
 
-  function undo() {
+  function undoAction() { doUndo(false); }
+
+  function doUndo(fromNet) {
     if (history.length === 0) return;
     if (gameOver) {
       gameOver = false;
@@ -323,9 +731,19 @@
     currentPlayer = currentPlayer === 1 ? 2 : 1;
     render();
     updateStatus();
+    if (!fromNet && mode !== 'offline') send({type:'undo'});
   }
 
-  function dropPiece(row, col) {
+  function attemptDrop(row, col) {
+    if (gameOver) return;
+    if (mode !== 'offline') {
+      if (currentPlayer !== myRole) return;
+      if (!conn || !conn.open) return;
+    }
+    doMove(row, col, false);
+  }
+
+  function doMove(row, col, fromNet) {
     if (gameOver) return;
     for (let l = 0; l < 4; l++) {
       if (board[l][row][col] === 0) {
@@ -337,17 +755,16 @@
           gameOver = true;
           render();
           setTimeout(() => showWinner(currentPlayer), 900);
-          return;
-        }
-        if (isFull()) {
+        } else if (isFull()) {
           gameOver = true;
           render();
           setTimeout(showDraw, 500);
-          return;
+        } else {
+          currentPlayer = currentPlayer === 1 ? 2 : 1;
+          render();
+          updateStatus();
         }
-        currentPlayer = currentPlayer === 1 ? 2 : 1;
-        render();
-        updateStatus();
+        if (!fromNet && mode !== 'offline') send({type:'move', row, col});
         return;
       }
     }
@@ -361,7 +778,6 @@
     return true;
   }
 
-  // 13 unique direction vectors in 3D
   const DIRECTIONS = [
     [1,0,0], [0,1,0], [0,0,1],
     [1,1,0], [1,-1,0], [1,0,1], [1,0,-1], [0,1,1], [0,1,-1],
@@ -391,23 +807,28 @@
   }
 
   function getDropLayer(row, col) {
-    for (let l = 0; l < 4; l++) {
+    for (let l = 0; l < 4; l++)
       if (board[l][row][col] === 0) return l;
-    }
     return -1;
   }
 
+  // ============================================================
+  // RENDER
+  // ============================================================
   function render() {
-    const container = document.getElementById('boards');
+    const container = $('boards');
     container.innerHTML = '';
     const lastMove = history[history.length - 1];
-    const order = [0, 1, 2, 3];
-    for (const l of order) {
+    const isMyTurn = mode === 'offline' || currentPlayer === myRole;
+    const netReady = mode === 'offline' || (conn && conn.open);
+    const canTap = !gameOver && isMyTurn && netReady;
+
+    for (let l = 0; l < 4; l++) {
       const wrap = document.createElement('div');
       wrap.className = 'board-container';
       const label = document.createElement('div');
       label.className = 'board-label';
-      label.textContent = `${l+1}階` + (l === 0 ? '(一番下)' : l === 3 ? '(一番上)' : '');
+      label.textContent = `${l+1}階` + (l === 0 ? ' (一番下)' : l === 3 ? ' (一番上)' : '');
       wrap.appendChild(label);
       const grid = document.createElement('div');
       grid.className = 'board';
@@ -428,10 +849,9 @@
           if (winningLine && winningLine.some(p => p.l===l && p.r===r && p.c===c)) {
             cell.classList.add('winning');
           }
-          if (!gameOver && drop === l) {
-            cell.classList.add('next-drop');
-            cell.classList.add('tappable');
-            cell.addEventListener('click', () => dropPiece(r, c));
+          if (drop === l && canTap) {
+            cell.classList.add('next-drop', 'tappable');
+            cell.addEventListener('click', () => attemptDrop(r, c));
           }
           grid.appendChild(cell);
         }
@@ -442,42 +862,119 @@
   }
 
   function updateStatus() {
-    const ind = document.getElementById('turnIndicator');
-    const txt = document.getElementById('statusText');
+    const ind = $('turnIndicator');
+    const txt = $('statusText');
     ind.className = 'turn-indicator ' + (currentPlayer === 1 ? 'piece-black' : 'piece-white');
-    txt.textContent = currentPlayer === 1 ? '黒の番' : '白の番';
+    if (mode === 'offline') {
+      txt.textContent = currentPlayer === 1 ? '黒の番' : '白の番';
+    } else {
+      txt.textContent = currentPlayer === myRole ? 'あなたの番' : '相手の番';
+    }
   }
 
   function showWinner(player) {
-    const piece = document.getElementById('winnerPiece');
-    const text = document.getElementById('winnerText');
+    const piece = $('winnerPiece');
+    const text = $('winnerText');
     piece.className = 'winner-piece ' + (player === 1 ? 'piece-black' : 'piece-white');
     piece.style.background = '';
-    text.textContent = (player === 1 ? '黒' : '白') + 'の勝ち！';
-    document.getElementById('modal').classList.add('show');
+    if (mode === 'offline') {
+      text.textContent = (player === 1 ? '黒' : '白') + 'の勝ち！';
+    } else {
+      text.textContent = player === myRole ? '🎉 あなたの勝ち！' : '相手の勝ち';
+    }
+    $('modal').classList.add('show');
   }
 
   function showDraw() {
-    const piece = document.getElementById('winnerPiece');
+    const piece = $('winnerPiece');
     piece.className = 'winner-piece';
     piece.style.background = 'linear-gradient(135deg, #888, #444)';
-    document.getElementById('winnerText').textContent = '引き分け';
-    document.getElementById('modal').classList.add('show');
+    $('winnerText').textContent = '引き分け';
+    $('modal').classList.add('show');
   }
 
-  function hideModal() {
-    document.getElementById('modal').classList.remove('show');
+  function hideModal() { $('modal').classList.remove('show'); }
+
+  // ============================================================
+  // SHARE / CLIPBOARD
+  // ============================================================
+  function getShareUrl(code) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', code);
+    url.hash = '';
+    return url.toString();
   }
 
-  document.getElementById('newGameBtn').addEventListener('click', newGame);
-  document.getElementById('undoBtn').addEventListener('click', undo);
-  document.getElementById('modalNewBtn').addEventListener('click', newGame);
-  document.getElementById('modalCloseBtn').addEventListener('click', hideModal);
-  document.getElementById('modal').addEventListener('click', (e) => {
+  function copyText(text, successMsg) {
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); toast(successMsg); } catch(e) { toast('コピー失敗'); }
+      document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => toast(successMsg)).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function toast(msg) {
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('show'));
+    setTimeout(() => {
+      t.classList.remove('show');
+      setTimeout(() => t.remove(), 300);
+    }, 1500);
+  }
+
+  // ============================================================
+  // WIRE UP
+  // ============================================================
+  $('createBtn').addEventListener('click', createRoom);
+  $('joinBtn').addEventListener('click', () => joinRoom());
+  $('codeInput').addEventListener('keypress', e => {
+    if (e.key === 'Enter') joinRoom();
+  });
+  $('codeInput').addEventListener('input', e => {
+    e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
+  });
+  $('offlineBtn').addEventListener('click', startOffline);
+  $('cancelBtn').addEventListener('click', () => {
+    cleanupNetwork();
+    showScreen('connect');
+  });
+  $('copyCodeBtn').addEventListener('click', () => copyText(roomCode, 'コードをコピーしました'));
+  $('copyLinkBtn').addEventListener('click', () => copyText(getShareUrl(roomCode), 'リンクをコピーしました'));
+  $('newGameBtn').addEventListener('click', newGameAction);
+  $('undoBtn').addEventListener('click', undoAction);
+  $('leaveBtn').addEventListener('click', leaveRoom);
+  $('modalNewBtn').addEventListener('click', newGameAction);
+  $('modalCloseBtn').addEventListener('click', hideModal);
+  $('modal').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) hideModal();
   });
 
-  init();
+  window.addEventListener('beforeunload', cleanupNetwork);
+
+  // Auto-fill / auto-join from URL ?room=XXXXXX
+  const urlParams = new URLSearchParams(window.location.search);
+  const roomFromUrl = urlParams.get('room');
+  if (roomFromUrl) {
+    const cleaned = roomFromUrl.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
+    $('codeInput').value = cleaned;
+    showScreen('connect');
+    // Wait for PeerJS to load, then auto-join
+    setTimeout(() => joinRoom(cleaned), 300);
+  } else {
+    showScreen('connect');
+  }
 })();
 </script>
 </body>
