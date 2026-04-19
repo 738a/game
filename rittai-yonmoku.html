@@ -523,6 +523,1862 @@
 </head>
 <body>
 
+<div class="build-banner" id="buildBanner">build 2026-04-19l — teal board + shared hints</div>
+
+<div id="waitScreen" class="screen">
+  <div class="card">
+    <div class="brand">立体四目</div>
+    <div class="subtitle">遠隔で2人対戦</div>
+
+    <div id="connectingBlock">
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+      <div class="wait-headline" id="waitHeadline">
+        対戦相手を待っています<span class="elapsed" id="elapsed"></span>
+      </div>
+      <div class="status-line" id="statusLine">通信を準備中…</div>
+      <div class="ws-badge">
+        <div class="ws-dot" id="wsDot"></div>
+        <span id="wsLabel">接続中…</span>
+      </div>
+    </div>
+
+    <div id="setupBlock" hidden>
+      <div class="setup-section">
+        <div class="setup-label">あなたの色</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-choice="color" data-value="1">
+            <span class="choice-piece piece-black"></span>黒
+          </button>
+          <button class="choice-btn" data-choice="color" data-value="2">
+            <span class="choice-piece piece-white"></span>白
+          </button>
+        </div>
+        <div class="setup-label">手番</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-choice="turn" data-value="first">先攻</button>
+          <button class="choice-btn" data-choice="turn" data-value="second">後攻</button>
+        </div>
+        <div class="setup-label">リーチ表示 (3Dビューでリーチラインを表示)</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-choice="hints" data-value="on">あり</button>
+          <button class="choice-btn" data-choice="hints" data-value="off">なし</button>
+        </div>
+        <button class="start-btn" id="startBtn" disabled>試合開始</button>
+        <div class="partner-choice-hint" id="partnerHint"></div>
+      </div>
+    </div>
+
+    <div class="err" id="errLine" hidden></div>
+    <div class="footer-link">
+      <button class="text-btn" id="offlineBtn">同じ端末で2人で遊ぶ</button>
+    </div>
+    <details class="diag">
+      <summary>うまく繋がらないとき(接続ログ)</summary>
+      <div class="log" id="log"></div>
+    </details>
+  </div>
+</div>
+
+<div id="gameScreen" hidden style="width:100%;display:flex;flex-direction:column;align-items:center;">
+  <div class="header"><h1>立体四目</h1></div>
+  <div class="status">
+    <div class="turn-indicator piece-black" id="turnIndicator"></div>
+    <span id="statusText">黒の番</span>
+  </div>
+  <div class="net-info" id="netInfo" hidden>
+    <span class="net-status" id="netStatus">🟢 接続中</span>
+    <span id="myRoleDisplay"></span>
+  </div>
+  <div class="boards" id="boards"></div>
+
+  <div class="view3d-wrap">
+    <div class="view3d-header">
+      <div class="view3d-title">3Dビュー</div>
+      <button class="view3d-reset" id="view3dReset">視点リセット</button>
+    </div>
+    <canvas id="view3dCanvas"></canvas>
+    <div class="view3d-hint">ドラッグで回転・ピンチでズーム ／ <span style="color:#ff8fa3">x</span>・<span style="color:#7dd3fc">y</span>・<span style="color:#ffd86b">z</span> 軸</div>
+  </div>
+
+  <div class="controls">
+    <button class="primary" id="newGameBtn">新しい対局</button>
+    <button id="undoBtn">一手戻す</button>
+    <button id="leaveBtn">退室</button>
+  </div>
+  <div class="info">
+    縦・横・斜め・立体斜めに <b>4つ並べたら勝ち</b><br>
+    黄色い枠のマスをタップして駒を置きます
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <div class="winner-piece" id="winnerPiece"></div>
+    <div class="winner-text" id="winnerText"></div>
+    <div class="modal-buttons">
+      <button id="modalCloseBtn">盤面を見る</button>
+      <button class="primary" id="modalNewBtn">もう一度</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<script>
+(function() {
+const $ = id => document.getElementById(id);
+
+function logMsg(msg) {
+  const t = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+  const line = `[${t}] ${msg}\n`;
+  const el = $('log');
+  if (el) { el.textContent += line; el.scrollTop = el.scrollHeight; }
+  console.log('[ritai]', msg);
+}
+function setStatus(msg) { $('statusLine').textContent = msg || ''; }
+function setError(msg) {
+  const el = $('errLine');
+  if (msg) { el.textContent = msg; el.hidden = false; }
+  else { el.textContent = ''; el.hidden = true; }
+}
+function setWsState(state, label) {
+  $('wsDot').className = 'ws-dot ' + state;
+  $('wsLabel').textContent = label;
+}
+
+function normalize(s) {
+  return (s || '').toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+const URL_KEY = normalize((location.host || 'local') + '-' + (location.pathname || '/')).slice(0, 40);
+const TOPIC = 'rttymk-yonmoku-v2-' + URL_KEY;
+logMsg(`TOPIC = "${TOPIC}"`);
+const MY_ID = Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+logMsg(`自分のID = ${MY_ID}`);
+
+// ============================================================
+// STATE
+// ============================================================
+let board, currentPlayer, gameOver, history, winningLine;
+let mode = null;
+let myRole = null;
+let partnerId = null;
+let ws = null;
+let wsBackoff = 1000;
+let elapsedTimer = null;
+let elapsedSec = 0;
+let heartbeatTimer = null;
+let lastHeartbeatFromPartner = 0;
+let reconnectTimer = null;
+
+let myChoice = { color: null, turn: null, hints: loadHintsPref() };
+let partnerChoice = { color: null, turn: null, hints: null };
+let myStartPressed = false;
+let partnerStartPressed = false;
+let matchStarted = false;
+let showHints = myChoice.hints === 'on';  // 試合中のリーチ表示フラグ
+
+function loadHintsPref() {
+  try {
+    const v = localStorage.getItem('rttymk-hints');
+    if (v === 'on' || v === 'off') return v;
+  } catch (e) {}
+  return null;
+}
+function saveHintsPref(v) {
+  try { localStorage.setItem('rttymk-hints', v); } catch (e) {}
+}
+
+function showConnecting() { $('connectingBlock').hidden = false; $('setupBlock').hidden = true; }
+function showSetup() { $('connectingBlock').hidden = true; $('setupBlock').hidden = false; }
+function showWait() {
+  $('waitScreen').hidden = false;
+  $('gameScreen').hidden = true;
+  $('buildBanner').hidden = false;
+  stopAnim3D();
+}
+function showGame() {
+  $('waitScreen').hidden = true;
+  $('gameScreen').hidden = false;
+  $('buildBanner').hidden = true;
+  setTimeout(initOrResize3D, 50);
+}
+
+function startElapsed() {
+  stopElapsed();
+  elapsedSec = 0;
+  elapsedTimer = setInterval(() => {
+    elapsedSec++;
+    $('elapsed').textContent = ` (${elapsedSec}秒)`;
+  }, 1000);
+}
+function stopElapsed() {
+  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  $('elapsed').textContent = '';
+}
+
+// ============================================================
+// MQTT (broker.emqx.io / broker.hivemq.com / test.mosquitto.org)
+// ============================================================
+const MQTT_BROKERS = [
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
+  'wss://test.mosquitto.org:8081/mqtt'
+];
+let currentBrokerIdx = 0;
+let mqttClient = null;
+const MQTT_TOPIC = 'rttymk/' + TOPIC;  // MQTTではスラッシュが階層区切り
+
+function connectWs() {
+  if (mode !== 'online') return;
+  if (typeof mqtt === 'undefined') {
+    logMsg('❌ mqtt.js ライブラリ未読み込み');
+    setWsState('down', 'ライブラリエラー');
+    setTimeout(() => connectWs(), 3000);
+    return;
+  }
+  clearTimeout(reconnectTimer);
+
+  const brokerUrl = MQTT_BROKERS[currentBrokerIdx];
+  logMsg(`MQTT接続試行: ${brokerUrl}`);
+  setWsState('', '接続中…');
+
+  try {
+    mqttClient = mqtt.connect(brokerUrl, {
+      clientId: 'rttymk_' + MY_ID,
+      clean: true,
+      connectTimeout: 10000,
+      keepalive: 30,
+      reconnectPeriod: 0  // 自前で再接続制御
+    });
+  } catch (e) {
+    logMsg('MQTT作成失敗: ' + e);
+    tryNextBroker();
+    return;
+  }
+
+  mqttClient.on('connect', () => {
+    logMsg(`✓ MQTT接続成功 (${brokerUrl.split('/')[2]})`);
+    wsBackoff = 1000;
+    setWsState('up', 'MQTT接続中 (' + brokerUrl.split('/')[2].split(':')[0] + ')');
+    setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
+
+    mqttClient.subscribe(MQTT_TOPIC, { qos: 0 }, (err) => {
+      if (err) { logMsg('subscribe失敗: ' + err); return; }
+      logMsg(`subscribe OK: ${MQTT_TOPIC}`);
+      // subscribeしてからHELLO送信
+      setTimeout(() => {
+        sendRaw({type: 'hello', from: MY_ID});
+        startHeartbeat();
+      }, 300);
+    });
+  });
+
+  mqttClient.on('message', (topic, payload) => {
+    if (topic !== MQTT_TOPIC) return;
+    try {
+      const msg = JSON.parse(payload.toString());
+      handleMessage(msg);
+    } catch (e) { logMsg('メッセージパース失敗: ' + e); }
+  });
+
+  mqttClient.on('error', (err) => {
+    logMsg('⚠ MQTTエラー: ' + (err && err.message || err));
+    setWsState('down', 'エラー');
+  });
+
+  mqttClient.on('close', () => {
+    logMsg('× MQTT切断');
+    setWsState('down', '切断 — 再接続します');
+    stopHeartbeat();
+    scheduleReconnect();
+  });
+
+  mqttClient.on('offline', () => {
+    logMsg('⚠ MQTT offline');
+  });
+}
+
+function tryNextBroker() {
+  currentBrokerIdx = (currentBrokerIdx + 1) % MQTT_BROKERS.length;
+  logMsg(`次のブローカーを試行: ${MQTT_BROKERS[currentBrokerIdx]}`);
+  setTimeout(() => connectWs(), 2000);
+}
+
+function scheduleReconnect() {
+  if (mode !== 'online') return;
+  reconnectTimer = setTimeout(() => {
+    wsBackoff = Math.min(wsBackoff * 2, 15000);
+    // 複数回失敗したら別のブローカーを試す
+    if (wsBackoff >= 8000) {
+      tryNextBroker();
+    } else {
+      connectWs();
+    }
+  }, wsBackoff);
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  // MQTT自体のkeepaliveがあるので、アプリ層のpingは控えめに
+  heartbeatTimer = setInterval(() => {
+    if (partnerId && lastHeartbeatFromPartner > 0) {
+      if (Date.now() - lastHeartbeatFromPartner > 90000) {
+        logMsg('⚠ 相手から90秒以上応答なし');
+        handlePartnerLeave();
+      }
+    }
+  }, 15000);
+}
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+function sendRaw(obj) {
+  if (!mqttClient || !mqttClient.connected) {
+    logMsg('⚠ MQTT未接続で送信スキップ');
+    return;
+  }
+  try {
+    mqttClient.publish(MQTT_TOPIC, JSON.stringify(obj), { qos: 0 }, (err) => {
+      if (err) logMsg('publish失敗: ' + err);
+    });
+  } catch (e) { logMsg('送信例外: ' + e); }
+}
+
+// ============================================================
+// PROTOCOL
+// ============================================================
+function handleMessage(msg) {
+  if (!msg || !msg.from || msg.from === MY_ID) return;
+  if (msg.type === 'hello') {
+    if (!partnerId) {
+      pairWith(msg.from);
+      sendRaw({type: 'hello-ack', from: MY_ID, to: msg.from});
+    }
+    return;
+  }
+  if (msg.type === 'hello-ack') {
+    if (msg.to !== MY_ID) return;
+    if (!partnerId) pairWith(msg.from);
+    return;
+  }
+  if (msg.type === 'ping') {
+    if (msg.from === partnerId) lastHeartbeatFromPartner = Date.now();
+    return;
+  }
+  if (msg.from !== partnerId) return;
+  lastHeartbeatFromPartner = Date.now();
+
+  if (msg.type === 'choice') {
+    partnerChoice.color = msg.color;
+    partnerChoice.turn = msg.turn;
+    if (msg.hints) partnerChoice.hints = msg.hints;
+    updatePartnerHint();
+    updateChoiceUI();
+  } else if (msg.type === 'match-begin') {
+    if (!matchStarted) startMatchWithRoles(msg.yourColor, msg.yourTurn, msg.hintsAgreed);
+  } else if (msg.type === 'move') {
+    doMove(msg.row, msg.col, true);
+  } else if (msg.type === 'reset') {
+    resetToSetup();
+  } else if (msg.type === 'undo') {
+    doUndo(true);
+  } else if (msg.type === 'bye') {
+    handlePartnerLeave();
+  }
+}
+
+function pairWith(peerId) {
+  partnerId = peerId;
+  lastHeartbeatFromPartner = Date.now();
+  logMsg(`✓ ピア確定`);
+  onConnected();
+}
+
+function handlePartnerLeave() {
+  if (!partnerId) return;
+  logMsg('× 相手退出');
+  partnerId = null;
+  myRole = null;
+  partnerChoice = { color: null, turn: null, hints: null };
+  partnerStartPressed = false;
+  myStartPressed = false;
+  matchStarted = false;
+  myChoice = { color: null, turn: null, hints: loadHintsPref() };
+  updateChoiceUI();
+  updatePartnerHint();
+  if ($('gameScreen').hidden === false) {
+    gameOver = true;
+    render();
+  }
+  mode = 'online';
+  showWait();
+  showConnecting();
+  startElapsed();
+  setStatus('相手が退出しました。新しい相手を待っています…');
+}
+
+function onConnected() {
+  stopElapsed();
+  setStatus('');
+  showSetup();
+  updateChoiceUI();
+  updatePartnerHint();
+  toast('接続完了 — 色と手番を選んでください', 2500);
+}
+
+function updateChoiceUI() {
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    const kind = btn.dataset.choice;
+    const val = btn.dataset.value;
+    const selected = (kind === 'color' && String(myChoice.color) === val)
+                  || (kind === 'turn' && myChoice.turn === val)
+                  || (kind === 'hints' && myChoice.hints === val);
+    btn.classList.toggle('selected', selected);
+    btn.disabled = myStartPressed;
+  });
+  const ready = myChoice.color && myChoice.turn && myChoice.hints;
+  $('startBtn').disabled = !ready;
+  // 両者の hints 選択から最終状態を表示
+  if (myChoice.hints && partnerChoice.hints) {
+    const bothOn = myChoice.hints === 'on' && partnerChoice.hints === 'on';
+    $('startBtn').textContent = bothOn
+      ? '試合開始 (リーチ表示:あり)'
+      : '試合開始 (リーチ表示:なし)';
+  } else {
+    $('startBtn').textContent = '試合開始';
+  }
+}
+
+function updatePartnerHint() {
+  const hint = $('partnerHint');
+  if (!partnerId) { hint.textContent = ''; return; }
+  if (partnerChoice.color || partnerChoice.turn || partnerChoice.hints) {
+    const pColor = partnerChoice.color === 1 ? '⚫ 黒' : partnerChoice.color === 2 ? '⚪ 白' : '…';
+    const pTurn = partnerChoice.turn === 'first' ? '先攻' : partnerChoice.turn === 'second' ? '後攻' : '…';
+    const pHints = partnerChoice.hints === 'on' ? 'リーチ:あり' : partnerChoice.hints === 'off' ? 'リーチ:なし' : 'リーチ:…';
+    hint.textContent = `相手の選択: ${pColor} / ${pTurn} / ${pHints}`;
+  } else {
+    hint.textContent = '相手も選択中です…';
+  }
+}
+
+function onChoiceClicked(kind, value) {
+  if (matchStarted) return;
+  if (kind === 'color') myChoice.color = Number(value);
+  else if (kind === 'turn') myChoice.turn = value;
+  else if (kind === 'hints') { myChoice.hints = value; saveHintsPref(value); }
+  updateChoiceUI();
+  // 選択内容はすべて相手に共有(リーチ表示は両者合意が必要)
+  sendRaw({
+    type: 'choice',
+    from: MY_ID,
+    color: myChoice.color,
+    turn: myChoice.turn,
+    hints: myChoice.hints
+  });
+}
+
+function onStartClicked() {
+  if (!myChoice.color || !myChoice.turn || !myChoice.hints) return;
+  if (matchStarted) return;
+  startAsInitiator();
+}
+
+function startAsInitiator() {
+  const myColor = myChoice.color;
+  const myTurn = myChoice.turn;
+  const partnerColor = (myColor === 1) ? 2 : 1;
+  const partnerTurn = (myTurn === 'first') ? 'second' : 'first';
+  // リーチ表示は「両者とも on」を選択した時だけ有効
+  const hintsAgreed = (myChoice.hints === 'on' && partnerChoice.hints === 'on');
+  sendRaw({
+    type: 'match-begin',
+    from: MY_ID,
+    yourColor: partnerColor,
+    yourTurn: partnerTurn,
+    hintsAgreed: hintsAgreed
+  });
+  startMatchWithRoles(myColor, myTurn, hintsAgreed);
+}
+
+function startMatchWithRoles(myColor, myTurn, hintsAgreed) {
+  if (matchStarted) return;
+  matchStarted = true;
+  myRole = myColor;
+  showHints = !!hintsAgreed;
+  const myColorName = myColor === 1 ? '黒' : '白';
+  const myTurnName = myTurn === 'first' ? '先攻' : '後攻';
+  init();
+  const firstColor = (myTurn === 'first') ? myColor : (myColor === 1 ? 2 : 1);
+  currentPlayer = firstColor;
+  updateNetInfo(true);
+  showGame();
+  render();
+  updateStatus();
+  const hintsLabel = showHints ? ' / リーチ表示あり' : '';
+  toast(`あなた: ${myColorName} / ${myTurnName}${hintsLabel}`, 2800);
+}
+
+function resetToSetup() {
+  myChoice = { color: null, turn: null, hints: loadHintsPref() };
+  partnerChoice = { color: null, turn: null, hints: null };
+  myStartPressed = false;
+  partnerStartPressed = false;
+  matchStarted = false;
+  myRole = null;
+  init();
+  hideModal();
+  showWait();
+  showSetup();
+  updateChoiceUI();
+  updatePartnerHint();
+}
+
+function updateNetInfo(connected) {
+  if (mode !== 'online') { $('netInfo').hidden = true; return; }
+  $('netInfo').hidden = false;
+  const ns = $('netStatus');
+  if (connected) {
+    ns.textContent = '🟢 接続中';
+    ns.classList.remove('disconnected');
+  } else {
+    ns.textContent = '⚠️ 相手が切断しました';
+    ns.classList.add('disconnected');
+  }
+  $('myRoleDisplay').textContent = myRole ? `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}` : '';
+}
+
+function leaveOnline() {
+  if (mqttClient) {
+    try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
+    try { mqttClient.end(true); } catch (e) {}
+    mqttClient = null;
+  }
+  ws = null;
+  stopHeartbeat();
+  stopElapsed();
+  clearTimeout(reconnectTimer);
+  partnerId = null;
+  myRole = null;
+  myChoice = { color: null, turn: null, hints: loadHintsPref() };
+  partnerChoice = { color: null, turn: null, hints: null };
+  myStartPressed = false;
+  partnerStartPressed = false;
+  matchStarted = false;
+}
+function leaveAndReturn() {
+  leaveOnline();
+  mode = null;
+  $('netInfo').hidden = true;
+  showWait();
+  showConnecting();
+  startOnline();
+}
+function startOnline() {
+  mode = 'online';
+  setError('');
+  setStatus('中継サーバーに接続中…');
+  showConnecting();
+  startElapsed();
+  connectWs();
+}
+function startOffline() {
+  leaveOnline();
+  mode = 'offline';
+  myRole = null;
+  init();
+  $('netInfo').hidden = true;
+  showGame();
+  render();
+  updateStatus();
+}
+function newGameAction() {
+  if (mode === 'online') {
+    sendRaw({type:'reset', from: MY_ID});
+    resetToSetup();
+  } else {
+    init();
+    hideModal();
+    render();
+    updateStatus();
+  }
+}
+
+// ============================================================
+// GAME LOGIC
+// ============================================================
+function init() {
+  board = Array.from({length:4}, () =>
+    Array.from({length:4}, () => Array(4).fill(0)));
+  currentPlayer = 1;
+  gameOver = false;
+  history = [];
+  winningLine = null;
+}
+
+function undoAction() { doUndo(false); }
+function doUndo(fromNet) {
+  if (history.length === 0) return;
+  if (gameOver) { gameOver = false; winningLine = null; }
+  const last = history.pop();
+  board[last.l][last.r][last.c] = 0;
+  currentPlayer = currentPlayer === 1 ? 2 : 1;
+  render();
+  updateStatus();
+  if (!fromNet && mode === 'online') sendRaw({type:'undo', from: MY_ID});
+}
+function attemptDrop(row, col) {
+  if (gameOver) return;
+  if (mode === 'online') {
+    if (currentPlayer !== myRole) return;
+    if (!partnerId) return;
+  }
+  doMove(row, col, false);
+}
+function doMove(row, col, fromNet) {
+  if (gameOver) return;
+  for (let l = 0; l < 4; l++) {
+    if (board[l][row][col] === 0) {
+      board[l][row][col] = currentPlayer;
+      history.push({l, r: row, c: col});
+      const win = checkWin(l, row, col);
+      if (win) {
+        winningLine = win;
+        gameOver = true;
+        render();
+        setTimeout(() => showWinner(currentPlayer), 900);
+      } else if (isFull()) {
+        gameOver = true;
+        render();
+        setTimeout(showDraw, 500);
+      } else {
+        currentPlayer = currentPlayer === 1 ? 2 : 1;
+        render();
+        updateStatus();
+      }
+      if (!fromNet && mode === 'online') sendRaw({type:'move', from: MY_ID, row, col});
+      return;
+    }
+  }
+}
+function isFull() {
+  for (let l = 0; l < 4; l++)
+    for (let r = 0; r < 4; r++)
+      for (let c = 0; c < 4; c++)
+        if (board[l][r][c] === 0) return false;
+  return true;
+}
+
+const DIRECTIONS = [
+  [1,0,0], [0,1,0], [0,0,1],
+  [1,1,0], [1,-1,0], [1,0,1], [1,0,-1], [0,1,1], [0,1,-1],
+  [1,1,1], [1,1,-1], [1,-1,1], [1,-1,-1]
+];
+
+function checkWin(l, r, c) {
+  const player = board[l][r][c];
+  if (player === 0) return null;
+  for (const [dl, dr, dc] of DIRECTIONS) {
+    const line = [{l, r, c}];
+    for (let i = 1; i < 4; i++) {
+      const nl=l+dl*i, nr=r+dr*i, nc=c+dc*i;
+      if (nl<0||nl>3||nr<0||nr>3||nc<0||nc>3) break;
+      if (board[nl][nr][nc] !== player) break;
+      line.push({l:nl,r:nr,c:nc});
+    }
+    for (let i = 1; i < 4; i++) {
+      const nl=l-dl*i, nr=r-dr*i, nc=c-dc*i;
+      if (nl<0||nl>3||nr<0||nr>3||nc<0||nc>3) break;
+      if (board[nl][nr][nc] !== player) break;
+      line.push({l:nl,r:nr,c:nc});
+    }
+    if (line.length >= 4) return line;
+  }
+  return null;
+}
+
+function getDropLayer(row, col) {
+  for (let l = 0; l < 4; l++)
+    if (board[l][row][col] === 0) return l;
+  return -1;
+}
+
+// ============================================================
+// リーチ判定(3手並んでいて4手目が置ける or まだ可能なライン)
+// ============================================================
+function findThreats() {
+  // 自分(myRole)と相手に分けて、3つ並んでて4つ目が空(あるいは相手が置けない)のラインを返す
+  const threats = { mine: [], opp: [] };
+  if (!myRole) return threats;
+  const opp = myRole === 1 ? 2 : 1;
+
+  const allLines = generateAllLines();
+  for (const line of allLines) {
+    let mineCount = 0, oppCount = 0, emptyIdx = -1;
+    for (let i = 0; i < 4; i++) {
+      const p = line[i];
+      const v = board[p.l][p.r][p.c];
+      if (v === myRole) mineCount++;
+      else if (v === opp) oppCount++;
+      else emptyIdx = i;
+    }
+    if (mineCount === 3 && oppCount === 0) {
+      threats.mine.push(line);
+    } else if (oppCount === 3 && mineCount === 0) {
+      threats.opp.push(line);
+    }
+  }
+  return threats;
+}
+
+let _allLinesCache = null;
+function generateAllLines() {
+  if (_allLinesCache) return _allLinesCache;
+  const lines = [];
+  for (let l = 0; l < 4; l++) {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        for (const [dl, dr, dc] of DIRECTIONS) {
+          const el = l + dl*3, er = r + dr*3, ec = c + dc*3;
+          if (el < 0 || el > 3 || er < 0 || er > 3 || ec < 0 || ec > 3) continue;
+          const line = [];
+          for (let i = 0; i < 4; i++) {
+            line.push({l: l+dl*i, r: r+dr*i, c: c+dc*i});
+          }
+          lines.push(line);
+        }
+      }
+    }
+  }
+  _allLinesCache = lines;
+  return lines;
+}
+
+function render() {
+  const container = $('boards');
+  container.innerHTML = '';
+  const lastMove = history[history.length - 1];
+  const isMyTurn = mode === 'offline' || currentPlayer === myRole;
+  const netReady = mode === 'offline' || !!partnerId;
+  const canTap = !gameOver && isMyTurn && netReady;
+
+  for (let l = 0; l < 4; l++) {
+    const wrap = document.createElement('div');
+    wrap.className = 'board-container';
+    const label = document.createElement('div');
+    label.className = 'board-label';
+    label.innerHTML = `<span class="axis-z">z=${l+1}</span> <span style="color:rgba(255,255,255,0.4);">(${l+1}階${l === 0 ? '・一番下' : l === 3 ? '・一番上' : ''})</span>`;
+    wrap.appendChild(label);
+
+    // 座標軸付きレイアウト
+    const boardGrid = document.createElement('div');
+    boardGrid.className = 'board-grid';
+
+    // 左上の空きセル
+    const corner = document.createElement('div');
+    corner.className = 'axis-corner';
+    boardGrid.appendChild(corner);
+
+    // 上: x軸ラベル (0,1,2,3)
+    const axisTop = document.createElement('div');
+    axisTop.className = 'axis-top';
+    for (let x = 0; x < 4; x++) {
+      const s = document.createElement('span');
+      s.textContent = x + 1;
+      axisTop.appendChild(s);
+    }
+    boardGrid.appendChild(axisTop);
+
+    // 左: y軸ラベル (1,2,3,4)
+    const axisLeft = document.createElement('div');
+    axisLeft.className = 'axis-left';
+    for (let y = 0; y < 4; y++) {
+      const s = document.createElement('span');
+      s.textContent = y + 1;
+      axisLeft.appendChild(s);
+    }
+    boardGrid.appendChild(axisLeft);
+
+    const grid = document.createElement('div');
+    grid.className = 'board';
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        const val = board[l][r][c];
+        const drop = getDropLayer(r, c);
+        if (val !== 0) {
+          const piece = document.createElement('div');
+          piece.className = 'piece ' + (val === 1 ? 'piece-black' : 'piece-white');
+          if (lastMove && lastMove.l === l && lastMove.r === r && lastMove.c === c) {
+            piece.classList.add('fresh');
+          }
+          cell.appendChild(piece);
+        }
+        if (winningLine && winningLine.some(p => p.l===l && p.r===r && p.c===c)) {
+          cell.classList.add('winning');
+        }
+        if (drop === l && canTap) {
+          cell.classList.add('next-drop', 'tappable');
+          cell.addEventListener('click', () => attemptDrop(r, c));
+        }
+        grid.appendChild(cell);
+      }
+    }
+    boardGrid.appendChild(grid);
+    wrap.appendChild(boardGrid);
+    container.appendChild(wrap);
+  }
+  update3D();
+}
+
+function updateStatus() {
+  const ind = $('turnIndicator');
+  const txt = $('statusText');
+  ind.className = 'turn-indicator ' + (currentPlayer === 1 ? 'piece-black' : 'piece-white');
+  if (mode === 'offline') {
+    txt.textContent = currentPlayer === 1 ? '黒の番' : '白の番';
+  } else {
+    txt.textContent = currentPlayer === myRole ? 'あなたの番' : '相手の番';
+  }
+}
+
+function showWinner(player) {
+  const piece = $('winnerPiece');
+  const text = $('winnerText');
+  piece.className = 'winner-piece ' + (player === 1 ? 'piece-black' : 'piece-white');
+  piece.style.background = '';
+  if (mode === 'offline') {
+    text.textContent = (player === 1 ? '黒' : '白') + 'の勝ち！';
+  } else {
+    text.textContent = player === myRole ? '🎉 あなたの勝ち！' : '相手の勝ち';
+  }
+  $('modal').classList.add('show');
+}
+function showDraw() {
+  const piece = $('winnerPiece');
+  piece.className = 'winner-piece';
+  piece.style.background = 'linear-gradient(135deg, #888, #444)';
+  $('winnerText').textContent = '引き分け';
+  $('modal').classList.add('show');
+}
+function hideModal() { $('modal').classList.remove('show'); }
+function toast(msg, duration = 1800) {
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(() => t.classList.add('show'));
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 300);
+  }, duration);
+}
+
+// ============================================================
+// 3D VIEW (Three.js)
+// ============================================================
+let threeScene, threeCamera, threeRenderer;
+let threeCubeGroup;         // 全体を束ねるグループ(回転対象)
+let threePiecesGroup;       // 駒を束ねるグループ
+let threeHighlightGroup;    // リーチ表示用
+let threeInitialized = false;
+let threeAnimId = null;
+
+// 視点制御
+let camRotX = -0.45;  // 上下(pitch)
+let camRotY = 0.6;    // 左右(yaw)
+let camDist = 11;
+const CAM_DIST_MIN = 6;
+const CAM_DIST_MAX = 20;
+
+function initOrResize3D() {
+  if ($('gameScreen').hidden) return;
+  const canvas = $('view3dCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  if (w <= 0 || h <= 0) return;
+
+  if (!threeInitialized) {
+    init3D(canvas, w, h);
+    threeInitialized = true;
+  } else {
+    threeRenderer.setSize(w, h, false);
+    threeCamera.aspect = w / h;
+    threeCamera.updateProjectionMatrix();
+  }
+  update3D();
+  startAnim3D();
+}
+
+function init3D(canvas, w, h) {
+  threeScene = new THREE.Scene();
+  threeCamera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+  threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  threeRenderer.setSize(w, h, false);
+  threeRenderer.setClearColor(0x000000, 0);
+
+  // ライト
+  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+  threeScene.add(ambient);
+  const dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir1.position.set(5, 8, 5);
+  threeScene.add(dir1);
+  const dir2 = new THREE.DirectionalLight(0x8899ff, 0.4);
+  dir2.position.set(-5, -3, -5);
+  threeScene.add(dir2);
+
+  // 盤グループ
+  threeCubeGroup = new THREE.Group();
+  threeScene.add(threeCubeGroup);
+
+  // 格子(4x4x4 のセル位置を示すワイヤーフレーム)
+  buildLattice();
+
+  // 駒グループ
+  threePiecesGroup = new THREE.Group();
+  threeCubeGroup.add(threePiecesGroup);
+
+  // リーチ表示グループ
+  threeHighlightGroup = new THREE.Group();
+  threeCubeGroup.add(threeHighlightGroup);
+
+  setupInteraction(canvas);
+  applyCamera();
+}
+
+function buildLattice() {
+  // 4x4x4 全セルに薄いワイヤーの立方体を置く
+  const cellSize = 1.4;
+  const offset = (cellSize * 3) / 2; // 中央合わせ
+
+  // 各階の床線(薄い)
+  for (let l = 0; l < 4; l++) {
+    const y = l * cellSize - offset;
+    // 階の平面ワイヤー
+    const geo = new THREE.BufferGeometry();
+    const pts = [];
+    // row方向の線
+    for (let r = 0; r <= 3; r++) {
+      const z = r * cellSize - offset - cellSize/2;
+      pts.push(-offset - cellSize/2, y - cellSize/2, z, offset + cellSize/2, y - cellSize/2, z);
+    }
+    for (let r = 0; r <= 3; r++) {
+      const z = r * cellSize - offset + cellSize/2;
+      pts.push(-offset - cellSize/2, y - cellSize/2, z, offset + cellSize/2, y - cellSize/2, z);
+    }
+    // col方向の線
+    for (let c = 0; c <= 3; c++) {
+      const x = c * cellSize - offset - cellSize/2;
+      pts.push(x, y - cellSize/2, -offset - cellSize/2, x, y - cellSize/2, offset + cellSize/2);
+    }
+    for (let c = 0; c <= 3; c++) {
+      const x = c * cellSize - offset + cellSize/2;
+      pts.push(x, y - cellSize/2, -offset - cellSize/2, x, y - cellSize/2, offset + cellSize/2);
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: l === 0 ? 0x6c7ae0 : 0x3a3e6e,
+      transparent: true,
+      opacity: l === 0 ? 0.55 : 0.28
+    });
+    threeCubeGroup.add(new THREE.LineSegments(geo, mat));
+  }
+
+  // 縦方向の支柱(4x4 = 16本)
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const x = c * cellSize - offset;
+      const z = r * cellSize - offset;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([
+        x, -offset - cellSize/2, z,
+        x, 3 * cellSize - offset + cellSize/2 - cellSize, z
+      ], 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x3a3e6e,
+        transparent: true,
+        opacity: 0.2
+      });
+      threeCubeGroup.add(new THREE.LineSegments(geo, mat));
+    }
+  }
+
+  // 座標軸＋目盛ラベル
+  buildAxes();
+}
+
+// テキストをcanvasに描いてSpriteとして返す
+function makeTextSprite(text, color, size) {
+  size = size || 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.font = `bold ${size}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(text, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+function buildAxes() {
+  const cellSize = 1.4;
+  const offset = (cellSize * 3) / 2;
+  const cellHalf = cellSize / 2;
+
+  // 軸の色: x=ピンク, y=水色, z=黄色 (盤の色と一致)
+  const xColor = '#ff8fa3';
+  const yColor = '#7dd3fc';
+  const zColor = '#ffd86b';
+
+  // 軸の矢印 (3D の内部座標: x→X軸, z→Y軸, y→Z軸 になっている)
+  // こちらの盤座標定義:
+  //   cell(c, r, l) => position (c*cs - offset, l*cs - offset, r*cs - offset)
+  //   つまり x = c (横方向), y(3D) = l (高さ), z(3D) = r (奥行き)
+  // 盤の論理軸 (x, y, z) = (c, r, l) とする
+  //   論理x (c) → 3D の X 軸
+  //   論理y (r) → 3D の Z 軸
+  //   論理z (l) → 3D の Y 軸
+
+  const axisOrigin = -offset - cellHalf - 0.3;
+  const axisEnd = offset + cellHalf + 0.6;
+
+  // x軸 (論理x, 3DのX方向)
+  addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisEnd, axisOrigin, axisOrigin], 0xff8fa3);
+  for (let i = 0; i < 4; i++) {
+    const sp = makeTextSprite(String(i + 1), xColor, 72);
+    sp.position.set(i * cellSize - offset, axisOrigin - 0.5, axisOrigin - 0.3);
+    sp.scale.set(0.6, 0.6, 1);
+    threeCubeGroup.add(sp);
+  }
+  const xLabel = makeTextSprite('x', xColor, 96);
+  xLabel.position.set(axisEnd + 0.3, axisOrigin - 0.4, axisOrigin - 0.3);
+  xLabel.scale.set(0.8, 0.8, 1);
+  threeCubeGroup.add(xLabel);
+
+  // y軸 (論理y, 3DのZ方向)
+  addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisOrigin, axisOrigin, axisEnd], 0x7dd3fc);
+  for (let i = 0; i < 4; i++) {
+    const sp = makeTextSprite(String(i + 1), yColor, 72);
+    sp.position.set(axisOrigin - 0.3, axisOrigin - 0.5, i * cellSize - offset);
+    sp.scale.set(0.6, 0.6, 1);
+    threeCubeGroup.add(sp);
+  }
+  const yLabel = makeTextSprite('y', yColor, 96);
+  yLabel.position.set(axisOrigin - 0.3, axisOrigin - 0.4, axisEnd + 0.3);
+  yLabel.scale.set(0.8, 0.8, 1);
+  threeCubeGroup.add(yLabel);
+
+  // z軸 (論理z, 3DのY方向=高さ)
+  addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisOrigin, axisEnd, axisOrigin], 0xffd86b);
+  for (let i = 0; i < 4; i++) {
+    const sp = makeTextSprite(String(i + 1), zColor, 72);
+    sp.position.set(axisOrigin - 0.5, i * cellSize - offset, axisOrigin - 0.3);
+    sp.scale.set(0.6, 0.6, 1);
+    threeCubeGroup.add(sp);
+  }
+  const zLabel = makeTextSprite('z', zColor, 96);
+  zLabel.position.set(axisOrigin - 0.5, axisEnd + 0.3, axisOrigin - 0.3);
+  zLabel.scale.set(0.8, 0.8, 1);
+  threeCubeGroup.add(zLabel);
+}
+
+function addAxisLine(from, to, color) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([
+    from[0], from[1], from[2],
+    to[0], to[1], to[2]
+  ], 3));
+  const mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.8 });
+  threeCubeGroup.add(new THREE.LineSegments(geo, mat));
+  // 矢印の先端 (小さな円錐)
+  const dir = new THREE.Vector3(to[0]-from[0], to[1]-from[1], to[2]-from[2]);
+  const len = dir.length();
+  const coneGeo = new THREE.ConeGeometry(0.1, 0.25, 8);
+  const coneMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+  const cone = new THREE.Mesh(coneGeo, coneMat);
+  cone.position.set(to[0], to[1], to[2]);
+  // 円錐は +Y 向きなので回転させる
+  const up = new THREE.Vector3(0, 1, 0);
+  const target = dir.clone().normalize();
+  const quat = new THREE.Quaternion().setFromUnitVectors(up, target);
+  cone.quaternion.copy(quat);
+  threeCubeGroup.add(cone);
+}
+
+function update3D() {
+  if (!threeInitialized) return;
+  if ($('gameScreen').hidden) return;
+
+  // 駒を再配置
+  while (threePiecesGroup.children.length) {
+    const o = threePiecesGroup.children[0];
+    threePiecesGroup.remove(o);
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+  while (threeHighlightGroup.children.length) {
+    const o = threeHighlightGroup.children[0];
+    threeHighlightGroup.remove(o);
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+
+  const cellSize = 1.4;
+  const offset = (cellSize * 3) / 2;
+  const lastMove = history[history.length - 1];
+
+  // 駒
+  const sphereGeo = new THREE.SphereGeometry(0.45, 24, 18);
+  for (let l = 0; l < 4; l++) {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const v = board[l][r][c];
+        if (v === 0) continue;
+        const isWinning = winningLine && winningLine.some(p => p.l===l && p.r===r && p.c===c);
+        const isLast = lastMove && lastMove.l === l && lastMove.r === r && lastMove.c === c;
+        const pos = new THREE.Vector3(
+          c * cellSize - offset,
+          l * cellSize - offset,
+          r * cellSize - offset
+        );
+        let mat;
+        if (v === 1) {
+          // 黒
+          mat = new THREE.MeshPhongMaterial({
+            color: 0x1a1a2e,
+            emissive: isWinning ? 0xffc940 : (isLast ? 0x667eea : 0x000000),
+            emissiveIntensity: isWinning ? 0.5 : (isLast ? 0.35 : 0),
+            shininess: 60,
+            specular: 0x555577
+          });
+        } else {
+          // 白
+          mat = new THREE.MeshPhongMaterial({
+            color: 0xf0f0fa,
+            emissive: isWinning ? 0xffc940 : (isLast ? 0x667eea : 0x000000),
+            emissiveIntensity: isWinning ? 0.5 : (isLast ? 0.35 : 0),
+            shininess: 80,
+            specular: 0xffffff
+          });
+        }
+        const mesh = new THREE.Mesh(sphereGeo.clone(), mat);
+        mesh.position.copy(pos);
+        threePiecesGroup.add(mesh);
+      }
+    }
+  }
+
+  // リーチ表示(両者が「あり」を選択した試合中のみ)
+  if (showHints && myRole && !gameOver) {
+    const threats = findThreats();
+    drawThreatLines(threats.mine, 0x6ee7b7, cellSize, offset);  // 自分のリーチ = 緑
+    drawThreatLines(threats.opp, 0xff7a8a, cellSize, offset);   // 相手のリーチ = 赤
+  }
+
+  // 勝利ライン表示
+  if (winningLine) {
+    drawThreatLines([winningLine], 0xffd700, cellSize, offset, true);
+  }
+}
+
+function drawThreatLines(lines, color, cellSize, offset, fat) {
+  for (const line of lines) {
+    // 線
+    const pts = line.map(p => new THREE.Vector3(
+      p.c * cellSize - offset,
+      p.l * cellSize - offset,
+      p.r * cellSize - offset
+    ));
+    const geo = new THREE.BufferGeometry().setFromPoints([pts[0], pts[3]]);
+    const mat = new THREE.LineBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: fat ? 0.95 : 0.7,
+      linewidth: 2
+    });
+    threeHighlightGroup.add(new THREE.Line(geo, mat));
+
+    // 各点にリングを出して強調
+    const ringGeo = new THREE.TorusGeometry(0.55, 0.06, 8, 24);
+    for (const pt of pts) {
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: fat ? 0.9 : 0.6
+      });
+      const ring = new THREE.Mesh(ringGeo.clone(), ringMat);
+      ring.position.copy(pt);
+      // 常にカメラを向く
+      ring.lookAt(0, 0, 10);
+      threeHighlightGroup.add(ring);
+    }
+  }
+}
+
+function applyCamera() {
+  if (!threeCamera) return;
+  // 球面座標でカメラ位置を計算
+  const y = Math.sin(camRotX) * camDist;
+  const r = Math.cos(camRotX) * camDist;
+  const x = Math.sin(camRotY) * r;
+  const z = Math.cos(camRotY) * r;
+  threeCamera.position.set(x, y, z);
+  threeCamera.lookAt(0, 0, 0);
+}
+
+function startAnim3D() {
+  if (threeAnimId) return;
+  const tick = () => {
+    if ($('gameScreen').hidden || !threeInitialized) {
+      threeAnimId = null;
+      return;
+    }
+    // リーチリングをカメラに向ける
+    if (threeHighlightGroup) {
+      for (const obj of threeHighlightGroup.children) {
+        if (obj.geometry && obj.geometry.type === 'TorusGeometry') {
+          obj.lookAt(threeCamera.position);
+        }
+      }
+    }
+    threeRenderer.render(threeScene, threeCamera);
+    threeAnimId = requestAnimationFrame(tick);
+  };
+  threeAnimId = requestAnimationFrame(tick);
+}
+
+function stopAnim3D() {
+  if (threeAnimId) { cancelAnimationFrame(threeAnimId); threeAnimId = null; }
+}
+
+function setupInteraction(canvas) {
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  let pinchDist = 0;
+
+  const onStart = (e) => {
+    e.preventDefault();
+    if (e.touches) {
+      if (e.touches.length === 1) {
+        dragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        dragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchDist = Math.hypot(dx, dy);
+      }
+    } else {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    }
+  };
+  const onMove = (e) => {
+    if (e.touches) {
+      if (e.touches.length === 1 && dragging) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - lastX;
+        const dy = e.touches[0].clientY - lastY;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        applyDrag(dx, dy);
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        if (pinchDist > 0) {
+          const delta = dist - pinchDist;
+          camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist - delta * 0.03));
+          applyCamera();
+        }
+        pinchDist = dist;
+      }
+    } else if (dragging) {
+      e.preventDefault();
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      applyDrag(dx, dy);
+    }
+  };
+  const onEnd = () => { dragging = false; pinchDist = 0; };
+
+  function applyDrag(dx, dy) {
+    camRotY -= dx * 0.008;
+    camRotX += dy * 0.008;
+    // pitch を ±80° に制限
+    const lim = Math.PI * 0.48;
+    if (camRotX > lim) camRotX = lim;
+    if (camRotX < -lim) camRotX = -lim;
+    applyCamera();
+  }
+
+  canvas.addEventListener('mousedown', onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onEnd);
+  canvas.addEventListener('touchstart', onStart, {passive: false});
+  canvas.addEventListener('touchmove', onMove, {passive: false});
+  canvas.addEventListener('touchend', onEnd);
+  canvas.addEventListener('touchcancel', onEnd);
+
+  // ホイールでズーム
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist + e.deltaY * 0.01));
+    applyCamera();
+  }, {passive: false});
+}
+
+function resetCamera() {
+  camRotX = -0.45;
+  camRotY = 0.6;
+  camDist = 11;
+  applyCamera();
+}
+
+window.addEventListener('resize', () => {
+  setTimeout(initOrResize3D, 100);
+});
+
+// ============================================================
+// WIRE UP
+// ============================================================
+document.querySelectorAll('.choice-btn').forEach(btn => {
+  btn.addEventListener('click', () => onChoiceClicked(btn.dataset.choice, btn.dataset.value));
+});
+$('startBtn').addEventListener('click', onStartClicked);
+$('offlineBtn').addEventListener('click', startOffline);
+$('newGameBtn').addEventListener('click', newGameAction);
+$('undoBtn').addEventListener('click', undoAction);
+$('leaveBtn').addEventListener('click', leaveAndReturn);
+$('modalNewBtn').addEventListener('click', newGameAction);
+$('modalCloseBtn').addEventListener('click', hideModal);
+$('view3dReset').addEventListener('click', resetCamera);
+$('modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) hideModal();
+});
+window.addEventListener('beforeunload', () => {
+  try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
+});
+setInterval(() => {
+  if (mode === 'online' && !partnerId && mqttClient && mqttClient.connected) {
+    sendRaw({type: 'hello', from: MY_ID});
+  }
+}, 15000);
+
+init();
+startOnline();
+})();
+</script>
+</body>
+</html>    width: 100%;
+    max-width: 480px;
+    background: linear-gradient(90deg, #f5576c, #f093fb);
+    color: #fff;
+    text-align: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-family: 'SF Mono','Menlo','Monaco',monospace;
+  }
+
+  .screen {
+    width: 100%;
+    max-width: 400px;
+    margin: auto 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 26px 20px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    text-align: center;
+  }
+  .brand {
+    font-size: 30px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    background: linear-gradient(90deg, #fff, #b8c5ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 13px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 22px;
+  }
+  .loading-dots { display: inline-flex; gap: 6px; margin-bottom: 14px; }
+  .loading-dots span {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
+    40% { transform: scale(1.2); opacity: 1; }
+  }
+  .wait-headline { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .elapsed { color: rgba(255,255,255,0.45); font-size: 13px; margin-left: 4px; }
+  .status-line {
+    font-size: 12px;
+    color: rgba(255,255,255,0.55);
+    margin-top: 8px;
+    line-height: 1.6;
+  }
+  .ws-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    background: rgba(0,0,0,0.25);
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 16px;
+    font-weight: 500;
+  }
+  .ws-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,200,80,0.8);
+    animation: pulse 1.2s infinite;
+  }
+  .ws-dot.up { background: #6ee7b7; box-shadow: 0 0 6px rgba(110,231,183,0.7); animation: none; }
+  .ws-dot.down { background: #ff8b8b; animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+  }
+
+  .setup-section { margin-top: 20px; text-align: left; }
+  .setup-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .choice-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .choice-btn {
+    padding: 14px 10px;
+    background: rgba(0,0,0,0.2);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    min-height: 54px;
+  }
+  .choice-btn:active { transform: scale(0.96); }
+  .choice-btn.selected {
+    background: rgba(118, 75, 162, 0.35);
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 1px #a78bfa, 0 4px 16px rgba(118,75,162,0.3);
+  }
+  .choice-piece { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
+  .start-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 14px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    border-radius: 14px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: 52px;
+  }
+  .start-btn:active { transform: scale(0.97); }
+  .start-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .partner-choice-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    margin-top: 6px;
+    line-height: 1.5;
+    text-align: center;
+  }
+  .footer-link { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .text-btn {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.55);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: underline;
+    padding: 8px;
+    width: auto;
+    min-height: auto;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .text-btn:active { color: rgba(255,255,255,0.85); }
+  details.diag {
+    margin-top: 14px;
+    text-align: left;
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  details.diag summary {
+    cursor: pointer;
+    color: rgba(255,255,255,0.5);
+    font-weight: 600;
+    list-style: none;
+  }
+  details.diag summary::after { content: ' ▸'; }
+  details.diag[open] summary::after { content: ' ▾'; }
+  .log {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .err { color: #ff8b8b; font-size: 13px; margin-top: 14px; line-height: 1.6; }
+
+  .header { width: 100%; max-width: 480px; text-align: center; padding: 4px 0 8px; }
+  .header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    background: linear-gradient(90deg, #ffffff 0%, #b8c5ff 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 10px 18px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 24px;
+    font-size: 15px;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    margin: 0 auto 8px;
+    min-height: 44px;
+  }
+  .net-info {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .net-status.disconnected { color: #ff8b8b; }
+  .turn-indicator { width: 22px; height: 22px; border-radius: 50%; transition: all 0.3s; flex-shrink: 0; }
+  .piece-black {
+    background: radial-gradient(circle at 32% 28%, #6b6b8e 0%, #2a2a3e 50%, #0a0a14 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.5);
+  }
+  .piece-white {
+    background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e8e8f0 50%, #b8b8c8 100%);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 -2px 4px rgba(0,0,0,0.15);
+  }
+  .boards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 440px; }
+  @media (min-width: 760px) {
+    .boards { grid-template-columns: repeat(4, 1fr); max-width: 820px; gap: 12px; }
+  }
+  .board-container {
+    background: rgba(25, 50, 45, 0.5);
+    border: 1px solid rgba(120, 180, 160, 0.2);
+    border-radius: 14px;
+    padding: 8px;
+  }
+  .board-label {
+    font-size: 11px;
+    text-align: center;
+    margin-bottom: 6px;
+    color: rgba(255,255,255,0.55);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .board-label .axis-z {
+    color: #ffd86b;
+  }
+  /* 盤を 行見出し(y軸) + 4x4 グリッド に分けて配置 */
+  .board-grid {
+    display: grid;
+    grid-template-columns: 14px 1fr;
+    grid-template-rows: 14px 1fr;
+    gap: 2px;
+    aspect-ratio: 1;
+  }
+  .axis-corner { }
+  .axis-top, .axis-left {
+    display: grid;
+    gap: 4px;
+    color: rgba(255,255,255,0.5);
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'SF Mono','Menlo','Monaco',monospace;
+  }
+  .axis-top {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .axis-top span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .axis-top span:first-child { color: #ff8fa3; }  /* x軸の色 */
+  .axis-top span { color: #ff8fa3; }
+  .axis-left {
+    grid-template-rows: repeat(4, 1fr);
+  }
+  .axis-left span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7dd3fc;  /* y軸の色 */
+  }
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+  .cell {
+    background: rgba(40, 90, 75, 0.85);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .cell.tappable { cursor: pointer; }
+  .cell.tappable:active { background: rgba(70, 130, 110, 0.95); transform: scale(0.92); }
+  .cell .piece { width: 80%; height: 80%; border-radius: 50%; }
+  .cell .piece.fresh { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  @keyframes pop {
+    0%   { transform: scale(0) translateY(-30%); opacity: 0; }
+    60%  { transform: scale(1.12) translateY(0); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .cell.next-drop::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 5px;
+    border: 2px dashed rgba(255,215,0,0.55);
+    pointer-events: none;
+    animation: glow 1.8s ease-in-out infinite;
+  }
+  @keyframes glow {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 0.9; }
+  }
+  .cell.winning {
+    background: rgba(255,215,0,0.28);
+    box-shadow: 0 0 12px rgba(255,215,0,0.6), inset 0 0 0 2px rgba(255,215,0,0.85);
+    animation: winPulse 1s ease-in-out infinite;
+  }
+  @keyframes winPulse {
+    0%, 100% { box-shadow: 0 0 12px rgba(255,215,0,0.55), inset 0 0 0 2px rgba(255,215,0,0.85); }
+    50%      { box-shadow: 0 0 24px rgba(255,215,0,0.95), inset 0 0 0 2px rgba(255,215,0,1); }
+  }
+
+  /* ============ 3D View ============ */
+  .view3d-wrap {
+    width: 100%;
+    max-width: 440px;
+    margin-top: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 10px 10px 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .view3d-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+  .view3d-title {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .view3d-reset {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.75);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: auto;
+    flex: none;
+    font-weight: 500;
+  }
+  .view3d-reset:active {
+    background: rgba(255,255,255,0.18);
+    transform: scale(0.95);
+  }
+  #view3dCanvas {
+    width: 100%;
+    aspect-ratio: 1.2;
+    border-radius: 10px;
+    background: radial-gradient(ellipse at center, #1a4a3e 0%, #0a1f1a 100%);
+    display: block;
+    touch-action: none;
+    cursor: grab;
+  }
+  #view3dCanvas:active { cursor: grabbing; }
+  .view3d-hint {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    text-align: center;
+    margin-top: 6px;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    width: 100%;
+    max-width: 440px;
+    justify-content: center;
+  }
+  button {
+    padding: 12px 14px;
+    background: rgba(255,255,255,0.08);
+    color: white;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 46px;
+    flex: 1;
+    font-family: inherit;
+  }
+  button:active { transform: scale(0.96); background: rgba(255,255,255,0.18); }
+  button.primary { background: linear-gradient(135deg, #667eea, #764ba2); border-color: transparent; }
+  .info {
+    font-size: 11px;
+    color: rgba(255,255,255,0.42);
+    text-align: center;
+    margin-top: 14px;
+    line-height: 1.7;
+    max-width: 440px;
+    padding: 0 8px;
+  }
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .modal.show { opacity: 1; pointer-events: auto; }
+  .modal-content {
+    background: linear-gradient(160deg, #2d2867 0%, #1a1a3e 100%);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 28px 24px;
+    border-radius: 18px;
+    text-align: center;
+    max-width: 280px;
+    width: 100%;
+    transform: scale(0.85);
+    transition: transform 0.25s;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  }
+  .modal.show .modal-content { transform: scale(1); }
+  .winner-piece { width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 14px; }
+  .winner-text { font-size: 22px; font-weight: 700; margin-bottom: 18px; }
+  .modal-buttons { display: flex; gap: 8px; }
+  .modal-buttons button { flex: 1; }
+  .toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(0,0,0,0.85);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 600;
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 200;
+    pointer-events: none;
+    text-align: center;
+    max-width: 320px;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
 <div class="build-banner" id="buildBanner">build 2026-04-19k — MQTT + 1-indexed</div>
 
 <div id="waitScreen" class="screen">
