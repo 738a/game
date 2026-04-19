@@ -121,25 +121,38 @@
     letter-spacing: 0.1em;
   }
 
-  .relay-status {
-    display: flex;
-    justify-content: center;
-    gap: 6px;
+  .relay-list {
     margin-top: 12px;
-    flex-wrap: wrap;
+    text-align: left;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 10px;
+    font-family: 'SF Mono','Menlo','Monaco',monospace;
   }
-  .relay-dot {
-    width: 8px; height: 8px;
+  .relay-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 0;
+    color: rgba(255,255,255,0.6);
+  }
+  .relay-row .dot {
+    width: 7px; height: 7px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.2);
-    transition: background 0.3s;
+    flex-shrink: 0;
   }
-  .relay-dot.up { background: #6ee7b7; box-shadow: 0 0 4px rgba(110,231,183,0.6); }
-  .relay-dot.down { background: rgba(255,255,255,0.15); }
+  .relay-row .dot.up { background: #6ee7b7; box-shadow: 0 0 4px rgba(110,231,183,0.6); }
+  .relay-row .dot.down { background: rgba(255,100,100,0.4); }
+  .relay-row .dot.pending { background: rgba(255,200,80,0.5); animation: pulse 1.2s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1; }
+  }
   .relay-summary {
     font-size: 11px;
     color: rgba(255,255,255,0.5);
-    margin-top: 6px;
+    margin-top: 8px;
   }
 
   .footer-link {
@@ -183,7 +196,7 @@
     font-size: 10px;
     color: rgba(255,255,255,0.7);
     margin-top: 8px;
-    max-height: 200px;
+    max-height: 220px;
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
@@ -196,7 +209,6 @@
     line-height: 1.6;
   }
 
-  /* Game */
   .header { width: 100%; max-width: 480px; text-align: center; padding: 4px 0 8px; }
   .header h1 {
     font-size: 22px;
@@ -395,7 +407,7 @@
 </head>
 <body>
 
-<div class="build-tag">build 2026-04-19e (torrent v2)</div>
+<div class="build-tag">build 2026-04-19e (nostr-fixed-relays)</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -407,10 +419,10 @@
     </div>
     <div class="status-line" id="statusLine">通信を準備中…</div>
 
-    <div class="relay-status" id="relayDots"></div>
+    <div class="relay-list" id="relayList"></div>
     <div class="relay-summary" id="relaySummary"></div>
 
-    <div class="room-fingerprint-label">この対戦の合言葉（両端末で一致してることを確認）</div>
+    <div class="room-fingerprint-label">対戦の合言葉(両端末で一致してることを確認)</div>
     <div class="room-fingerprint" id="roomFingerprint">--------</div>
 
     <div class="err" id="errLine" hidden></div>
@@ -475,37 +487,42 @@ function setError(msg) {
 }
 
 // ============================================================
-// IMPORT - Trystero v0.23 では @trystero-p2p/torrent が新しい場所
-// 複数のCDNを試して、どれかで成功させる
+// 信頼できる Nostr リレー(2026年現在の主要リレー)
+// ============================================================
+const NOSTR_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://relay.primal.net',
+  'wss://nostr.wine'
+];
+
+// ============================================================
+// IMPORT - Trystero Nostr (新パッケージ名 → 旧名 にフォールバック)
 // ============================================================
 let joinRoom, selfId, getRelaySockets;
-const CDN_ATTEMPTS = [
-  'https://esm.run/@trystero-p2p/torrent',
-  'https://esm.sh/@trystero-p2p/torrent',
-  'https://cdn.jsdelivr.net/npm/@trystero-p2p/torrent/+esm',
+const importCandidates = [
+  'https://esm.run/@trystero-p2p/nostr',
+  'https://esm.run/trystero@0.23.0/nostr',
+  'https://esm.run/trystero/nostr'
 ];
-setStatus('ライブラリを読み込み中…');
-for (const url of CDN_ATTEMPTS) {
+for (const url of importCandidates) {
   try {
     log(`import 試行: ${url}`);
     const mod = await import(url);
     joinRoom = mod.joinRoom;
     selfId = mod.selfId;
     getRelaySockets = mod.getRelaySockets;
-    if (joinRoom && selfId) {
-      log(`✓ 読み込み成功 (selfId: ${selfId.slice(0, 12)}…)`);
-      break;
-    } else {
-      log(`このCDNからjoinRoom/selfIdが取れず`);
-      joinRoom = null;
-    }
+    log(`✓ 読み込み成功: ${url}`);
+    log(`  selfId: ${selfId.slice(0, 12)}…`);
+    break;
   } catch (e) {
-    log(`× 失敗: ${e && e.message || e}`);
+    log(`✗ ${url} → ${(e && e.message || e).slice(0, 80)}`);
   }
 }
 if (!joinRoom) {
   setStatus('');
-  setError('すべてのCDNからのライブラリ読み込みに失敗しました。回線・ファイアウォールを確認してリロードしてください。');
+  setError('ライブラリの読み込みに失敗しました。回線を確認してリロードしてください。');
 }
 
 // ============================================================
@@ -522,7 +539,7 @@ let relayMonitor = null;
 let elapsedSec = 0;
 
 // ============================================================
-// APP_ID & ROOM_NAME (両端末で確実に一致するように厳格に正規化)
+// APP_ID & ROOM_NAME
 // ============================================================
 function normalize(s) {
   return (s || '').toLowerCase()
@@ -530,15 +547,14 @@ function normalize(s) {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 }
-// この HTML が置かれている origin + pathname が一致する人同士がマッチング
 const URL_KEY = normalize((location.host || 'local') + '_' + (location.pathname || '/'))
                   .slice(0, 40);
 const APP_ID = 'rttymk-yonmoku-' + URL_KEY;
 const ROOM_NAME = 'main';
 log(`APP_ID = "${APP_ID}"`);
 log(`ROOM   = "${ROOM_NAME}"`);
+log(`明示リレー: ${NOSTR_RELAYS.length} 個`);
 
-// 両端末で目視確認できるよう短いハッシュを表示
 async function fingerprint(s) {
   try {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -563,11 +579,10 @@ function startElapsed() {
     elapsedSec++;
     $('elapsed').textContent = ` (${elapsedSec}秒)`;
     if (elapsedSec === 15) {
-      log('⏱ 15秒経過 — まだピア未発見');
+      log('⏱ 15秒経過');
       setStatus('まだ繋がりません。相手も同じURLを開いていますか？');
     }
     if (elapsedSec === 45) {
-      log('⏱ 45秒経過 — リレーをチェック');
       setStatus('時間がかかっています。下の「合言葉」が両端末で一致しているか確認してください。');
     }
   }, 1000);
@@ -579,26 +594,33 @@ function stopElapsed() {
 
 function startRelayMonitor() {
   stopRelayMonitor();
+  // 初期表示: 全リレーを「接続待ち」表示
+  const list = $('relayList');
+  list.innerHTML = '';
+  NOSTR_RELAYS.forEach(url => {
+    const row = document.createElement('div');
+    row.className = 'relay-row';
+    row.dataset.url = url;
+    row.innerHTML = `<div class="dot pending"></div><span>${url.replace('wss://', '')}</span>`;
+    list.appendChild(row);
+  });
+
   const update = () => {
     if (!getRelaySockets) return;
     let sockets;
     try { sockets = getRelaySockets() || {}; } catch (e) { return; }
-    const urls = Object.keys(sockets);
-    const dots = $('relayDots');
-    dots.innerHTML = '';
     let upCount = 0;
-    urls.forEach(url => {
+    NOSTR_RELAYS.forEach(url => {
       const ws = sockets[url];
-      const isOpen = ws && ws.readyState === 1; // WebSocket.OPEN
+      const isOpen = ws && ws.readyState === 1;
+      const isFailed = ws && (ws.readyState === 3); // CLOSED
       if (isOpen) upCount++;
-      const dot = document.createElement('div');
-      dot.className = 'relay-dot ' + (isOpen ? 'up' : 'down');
-      dot.title = url + (isOpen ? ' (接続中)' : ' (未接続)');
-      dots.appendChild(dot);
+      const row = list.querySelector(`[data-url="${url}"] .dot`);
+      if (row) {
+        row.className = 'dot ' + (isOpen ? 'up' : (isFailed ? 'down' : 'pending'));
+      }
     });
-    $('relaySummary').textContent = urls.length === 0
-      ? 'リレー接続を初期化中…'
-      : `中継サーバー ${upCount}/${urls.length} に接続中`;
+    $('relaySummary').textContent = `中継サーバー ${upCount}/${NOSTR_RELAYS.length} に接続中`;
   };
   update();
   relayMonitor = setInterval(update, 1000);
@@ -614,13 +636,16 @@ function startOnline() {
   if (!joinRoom) return;
   mode = 'online';
   setError('');
-  setStatus('Trystero(Torrent方式)に接続中…');
+  setStatus('Nostr リレーに接続中…');
   startElapsed();
   startRelayMonitor();
 
   try {
-    log('joinRoom() 開始');
-    room = joinRoom({ appId: APP_ID, relayRedundancy: 4 }, ROOM_NAME);
+    log('joinRoom() 開始 (relayUrls 明示指定)');
+    room = joinRoom({
+      appId: APP_ID,
+      relayUrls: NOSTR_RELAYS  // 明示指定で両端末が必ず同じリレーに繋がる
+    }, ROOM_NAME);
     log('joinRoom() OK');
     setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
   } catch (e) {
@@ -653,12 +678,12 @@ function startOnline() {
   room.onPeerJoin(peerId => {
     log(`✓ ピア発見: ${peerId.slice(0, 12)}…`);
     if (partnerPeerId !== null) {
-      log('⚠ 既に対戦中のため新規ピアを無視');
+      log('⚠ 既に対戦中のため無視');
       return;
     }
     partnerPeerId = peerId;
     myRole = (selfId < peerId) ? 1 : 2;
-    log(`役割決定: あなた=${myRole === 1 ? '⚫黒(先手)' : '⚪白(後手)'}`);
+    log(`役割: あなた=${myRole === 1 ? '⚫黒(先手)' : '⚪白(後手)'}`);
     onConnected();
   });
 
