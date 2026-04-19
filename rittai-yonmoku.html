@@ -1533,7 +1533,7 @@ function setupInteraction(canvas) {
 
   function applyDrag(dx, dy) {
     camRotY -= dx * 0.008;
-    camRotX -= dy * 0.008;
+    camRotX += dy * 0.008;
     // pitch を ±80° に制限
     const lim = Math.PI * 0.48;
     if (camRotX > lim) camRotX = lim;
