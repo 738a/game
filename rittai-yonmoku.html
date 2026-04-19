@@ -101,7 +101,6 @@
     margin-top: 8px;
     line-height: 1.6;
   }
-
   .ws-badge {
     display: inline-flex;
     align-items: center;
@@ -165,11 +164,7 @@
     border-color: #a78bfa;
     box-shadow: 0 0 0 1px #a78bfa, 0 4px 16px rgba(118,75,162,0.3);
   }
-  .choice-piece {
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
+  .choice-piece { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; }
   .start-btn {
     width: 100%;
     margin-top: 8px;
@@ -186,16 +181,6 @@
   }
   .start-btn:active { transform: scale(0.97); }
   .start-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .waiting-banner {
-    margin-top: 14px;
-    padding: 10px 14px;
-    background: rgba(255,200,80,0.12);
-    border: 1px solid rgba(255,200,80,0.3);
-    border-radius: 10px;
-    font-size: 12px;
-    color: rgba(255,220,150,0.9);
-    line-height: 1.5;
-  }
   .partner-choice-hint {
     font-size: 11px;
     color: rgba(255,255,255,0.45);
@@ -203,12 +188,7 @@
     line-height: 1.5;
     text-align: center;
   }
-
-  .footer-link {
-    margin-top: 18px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255,255,255,0.08);
-  }
+  .footer-link { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255,255,255,0.08); }
   .text-btn {
     background: none;
     border: none;
@@ -223,7 +203,6 @@
     font-family: inherit;
   }
   .text-btn:active { color: rgba(255,255,255,0.85); }
-
   details.diag {
     margin-top: 14px;
     text-align: left;
@@ -357,6 +336,66 @@
     0%, 100% { box-shadow: 0 0 12px rgba(255,215,0,0.55), inset 0 0 0 2px rgba(255,215,0,0.85); }
     50%      { box-shadow: 0 0 24px rgba(255,215,0,0.95), inset 0 0 0 2px rgba(255,215,0,1); }
   }
+
+  /* ============ 3D View ============ */
+  .view3d-wrap {
+    width: 100%;
+    max-width: 440px;
+    margin-top: 14px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 10px 10px 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .view3d-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    padding: 0 4px;
+  }
+  .view3d-title {
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+  }
+  .view3d-reset {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.75);
+    font-size: 11px;
+    padding: 5px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: auto;
+    flex: none;
+    font-weight: 500;
+  }
+  .view3d-reset:active {
+    background: rgba(255,255,255,0.18);
+    transform: scale(0.95);
+  }
+  #view3dCanvas {
+    width: 100%;
+    aspect-ratio: 1.2;
+    border-radius: 10px;
+    background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0a1f 100%);
+    display: block;
+    touch-action: none;
+    cursor: grab;
+  }
+  #view3dCanvas:active { cursor: grabbing; }
+  .view3d-hint {
+    font-size: 10px;
+    color: rgba(255,255,255,0.35);
+    text-align: center;
+    margin-top: 6px;
+  }
+
   .controls {
     display: flex;
     gap: 8px;
@@ -445,7 +484,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19g — ntfy.sh WebSocket</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19h — 3D view</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -507,6 +546,16 @@
     <span id="myRoleDisplay"></span>
   </div>
   <div class="boards" id="boards"></div>
+
+  <div class="view3d-wrap">
+    <div class="view3d-header">
+      <div class="view3d-title">3Dビュー</div>
+      <button class="view3d-reset" id="view3dReset">視点リセット</button>
+    </div>
+    <canvas id="view3dCanvas"></canvas>
+    <div class="view3d-hint">ドラッグで回転・ピンチでズーム</div>
+  </div>
+
   <div class="controls">
     <button class="primary" id="newGameBtn">新しい対局</button>
     <button id="undoBtn">一手戻す</button>
@@ -529,6 +578,7 @@
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 (function() {
 const $ = id => document.getElementById(id);
@@ -560,7 +610,6 @@ function normalize(s) {
 const URL_KEY = normalize((location.host || 'local') + '-' + (location.pathname || '/')).slice(0, 40);
 const TOPIC = 'rttymk-yonmoku-v2-' + URL_KEY;
 logMsg(`TOPIC = "${TOPIC}"`);
-
 const MY_ID = Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
 logMsg(`自分のID = ${MY_ID}`);
 
@@ -585,23 +634,19 @@ let myStartPressed = false;
 let partnerStartPressed = false;
 let matchStarted = false;
 
-function showConnecting() {
-  $('connectingBlock').hidden = false;
-  $('setupBlock').hidden = true;
-}
-function showSetup() {
-  $('connectingBlock').hidden = true;
-  $('setupBlock').hidden = false;
-}
+function showConnecting() { $('connectingBlock').hidden = false; $('setupBlock').hidden = true; }
+function showSetup() { $('connectingBlock').hidden = true; $('setupBlock').hidden = false; }
 function showWait() {
   $('waitScreen').hidden = false;
   $('gameScreen').hidden = true;
   $('buildBanner').hidden = false;
+  stopAnim3D();
 }
 function showGame() {
   $('waitScreen').hidden = true;
   $('gameScreen').hidden = false;
   $('buildBanner').hidden = true;
+  setTimeout(initOrResize3D, 50);
 }
 
 function startElapsed() {
@@ -624,7 +669,6 @@ function connectWs() {
   if (mode !== 'online') return;
   clearTimeout(reconnectTimer);
   const wsUrl = `wss://ntfy.sh/${TOPIC}/ws`;
-  logMsg(`WS接続試行`);
   setWsState('', '接続中…');
   try { ws = new WebSocket(wsUrl); }
   catch (e) { logMsg('WS作成失敗: ' + e); scheduleReconnect(); return; }
@@ -669,7 +713,6 @@ function startHeartbeat() {
     sendRaw({type: 'ping', from: MY_ID});
     if (partnerId && lastHeartbeatFromPartner > 0) {
       if (Date.now() - lastHeartbeatFromPartner > 25000) {
-        logMsg('⚠ 相手から25秒以上応答なし');
         handlePartnerLeave();
       }
     }
@@ -691,9 +734,7 @@ function sendRaw(obj) {
 // ============================================================
 function handleMessage(msg) {
   if (!msg || !msg.from || msg.from === MY_ID) return;
-
   if (msg.type === 'hello') {
-    logMsg(`← HELLO from ${msg.from.slice(0, 10)}`);
     if (!partnerId) {
       pairWith(msg.from);
       sendRaw({type: 'hello-ack', from: MY_ID, to: msg.from});
@@ -709,7 +750,6 @@ function handleMessage(msg) {
     if (msg.from === partnerId) lastHeartbeatFromPartner = Date.now();
     return;
   }
-
   if (msg.from !== partnerId) return;
   lastHeartbeatFromPartner = Date.now();
 
@@ -718,10 +758,7 @@ function handleMessage(msg) {
     partnerChoice.turn = msg.turn;
     updatePartnerHint();
   } else if (msg.type === 'match-begin') {
-    // 相手が試合開始を確定 → 指定された役割で自分も開始
-    if (!matchStarted) {
-      startMatchWithRoles(msg.yourColor, msg.yourTurn);
-    }
+    if (!matchStarted) startMatchWithRoles(msg.yourColor, msg.yourTurn);
   } else if (msg.type === 'move') {
     doMove(msg.row, msg.col, true);
   } else if (msg.type === 'reset') {
@@ -736,7 +773,7 @@ function handleMessage(msg) {
 function pairWith(peerId) {
   partnerId = peerId;
   lastHeartbeatFromPartner = Date.now();
-  logMsg(`✓ ピア確定: ${peerId.slice(0, 10)}`);
+  logMsg(`✓ ピア確定`);
   onConnected();
 }
 
@@ -763,9 +800,6 @@ function handlePartnerLeave() {
   setStatus('相手が退出しました。新しい相手を待っています…');
 }
 
-// ============================================================
-// SETUP
-// ============================================================
 function onConnected() {
   stopElapsed();
   setStatus('');
@@ -812,8 +846,6 @@ function onChoiceClicked(kind, value) {
 function onStartClicked() {
   if (!myChoice.color || !myChoice.turn) return;
   if (matchStarted) return;
-  // どちらが先に押してもOK。押した人の希望を正として試合開始する
-  logMsg(`「試合開始」を押した(色=${myChoice.color}, 手番=${myChoice.turn})`);
   startAsInitiator();
 }
 
@@ -822,15 +854,7 @@ function startAsInitiator() {
   const myTurn = myChoice.turn;
   const partnerColor = (myColor === 1) ? 2 : 1;
   const partnerTurn = (myTurn === 'first') ? 'second' : 'first';
-
-  // 相手に「あなたはこの役割で」と通知
-  sendRaw({
-    type: 'match-begin',
-    from: MY_ID,
-    yourColor: partnerColor,
-    yourTurn: partnerTurn
-  });
-
+  sendRaw({ type: 'match-begin', from: MY_ID, yourColor: partnerColor, yourTurn: partnerTurn });
   startMatchWithRoles(myColor, myTurn);
 }
 
@@ -838,16 +862,11 @@ function startMatchWithRoles(myColor, myTurn) {
   if (matchStarted) return;
   matchStarted = true;
   myRole = myColor;
-
   const myColorName = myColor === 1 ? '黒' : '白';
   const myTurnName = myTurn === 'first' ? '先攻' : '後攻';
-  logMsg(`試合開始: あなた=${myColorName}/${myTurnName}`);
-
   init();
-  // 先攻プレイヤーの色を最初の手番にする
   const firstColor = (myTurn === 'first') ? myColor : (myColor === 1 ? 2 : 1);
   currentPlayer = firstColor;
-
   updateNetInfo(true);
   showGame();
   render();
@@ -881,9 +900,7 @@ function updateNetInfo(connected) {
     ns.textContent = '⚠️ 相手が切断しました';
     ns.classList.add('disconnected');
   }
-  $('myRoleDisplay').textContent = myRole
-    ? `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`
-    : '';
+  $('myRoleDisplay').textContent = myRole ? `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}` : '';
 }
 
 function leaveOnline() {
@@ -903,7 +920,6 @@ function leaveOnline() {
   partnerStartPressed = false;
   matchStarted = false;
 }
-
 function leaveAndReturn() {
   leaveOnline();
   mode = null;
@@ -912,7 +928,6 @@ function leaveAndReturn() {
   showConnecting();
   startOnline();
 }
-
 function startOnline() {
   mode = 'online';
   setError('');
@@ -921,7 +936,6 @@ function startOnline() {
   startElapsed();
   connectWs();
 }
-
 function startOffline() {
   leaveOnline();
   mode = 'offline';
@@ -929,8 +943,9 @@ function startOffline() {
   init();
   $('netInfo').hidden = true;
   showGame();
+  render();
+  updateStatus();
 }
-
 function newGameAction() {
   if (mode === 'online') {
     sendRaw({type:'reset', from: MY_ID});
@@ -956,7 +971,6 @@ function init() {
 }
 
 function undoAction() { doUndo(false); }
-
 function doUndo(fromNet) {
   if (history.length === 0) return;
   if (gameOver) { gameOver = false; winningLine = null; }
@@ -967,7 +981,6 @@ function doUndo(fromNet) {
   updateStatus();
   if (!fromNet && mode === 'online') sendRaw({type:'undo', from: MY_ID});
 }
-
 function attemptDrop(row, col) {
   if (gameOver) return;
   if (mode === 'online') {
@@ -976,7 +989,6 @@ function attemptDrop(row, col) {
   }
   doMove(row, col, false);
 }
-
 function doMove(row, col, fromNet) {
   if (gameOver) return;
   for (let l = 0; l < 4; l++) {
@@ -1003,7 +1015,6 @@ function doMove(row, col, fromNet) {
     }
   }
 }
-
 function isFull() {
   for (let l = 0; l < 4; l++)
     for (let r = 0; r < 4; r++)
@@ -1044,6 +1055,57 @@ function getDropLayer(row, col) {
   for (let l = 0; l < 4; l++)
     if (board[l][row][col] === 0) return l;
   return -1;
+}
+
+// ============================================================
+// リーチ判定(3手並んでいて4手目が置ける or まだ可能なライン)
+// ============================================================
+function findThreats() {
+  // 自分(myRole)と相手に分けて、3つ並んでて4つ目が空(あるいは相手が置けない)のラインを返す
+  const threats = { mine: [], opp: [] };
+  if (!myRole) return threats;
+  const opp = myRole === 1 ? 2 : 1;
+
+  const allLines = generateAllLines();
+  for (const line of allLines) {
+    let mineCount = 0, oppCount = 0, emptyIdx = -1;
+    for (let i = 0; i < 4; i++) {
+      const p = line[i];
+      const v = board[p.l][p.r][p.c];
+      if (v === myRole) mineCount++;
+      else if (v === opp) oppCount++;
+      else emptyIdx = i;
+    }
+    if (mineCount === 3 && oppCount === 0) {
+      threats.mine.push(line);
+    } else if (oppCount === 3 && mineCount === 0) {
+      threats.opp.push(line);
+    }
+  }
+  return threats;
+}
+
+let _allLinesCache = null;
+function generateAllLines() {
+  if (_allLinesCache) return _allLinesCache;
+  const lines = [];
+  for (let l = 0; l < 4; l++) {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        for (const [dl, dr, dc] of DIRECTIONS) {
+          const el = l + dl*3, er = r + dr*3, ec = c + dc*3;
+          if (el < 0 || el > 3 || er < 0 || er > 3 || ec < 0 || ec > 3) continue;
+          const line = [];
+          for (let i = 0; i < 4; i++) {
+            line.push({l: l+dl*i, r: r+dr*i, c: c+dc*i});
+          }
+          lines.push(line);
+        }
+      }
+    }
+  }
+  _allLinesCache = lines;
+  return lines;
 }
 
 function render() {
@@ -1090,6 +1152,7 @@ function render() {
     wrap.appendChild(grid);
     container.appendChild(wrap);
   }
+  update3D();
 }
 
 function updateStatus() {
@@ -1115,7 +1178,6 @@ function showWinner(player) {
   }
   $('modal').classList.add('show');
 }
-
 function showDraw() {
   const piece = $('winnerPiece');
   piece.className = 'winner-piece';
@@ -1123,9 +1185,7 @@ function showDraw() {
   $('winnerText').textContent = '引き分け';
   $('modal').classList.add('show');
 }
-
 function hideModal() { $('modal').classList.remove('show'); }
-
 function toast(msg, duration = 1800) {
   const t = document.createElement('div');
   t.className = 'toast';
@@ -1137,6 +1197,376 @@ function toast(msg, duration = 1800) {
     setTimeout(() => t.remove(), 300);
   }, duration);
 }
+
+// ============================================================
+// 3D VIEW (Three.js)
+// ============================================================
+let threeScene, threeCamera, threeRenderer;
+let threeCubeGroup;         // 全体を束ねるグループ(回転対象)
+let threePiecesGroup;       // 駒を束ねるグループ
+let threeHighlightGroup;    // リーチ表示用
+let threeInitialized = false;
+let threeAnimId = null;
+
+// 視点制御
+let camRotX = -0.45;  // 上下(pitch)
+let camRotY = 0.6;    // 左右(yaw)
+let camDist = 11;
+const CAM_DIST_MIN = 6;
+const CAM_DIST_MAX = 20;
+
+function initOrResize3D() {
+  if ($('gameScreen').hidden) return;
+  const canvas = $('view3dCanvas');
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  if (w <= 0 || h <= 0) return;
+
+  if (!threeInitialized) {
+    init3D(canvas, w, h);
+    threeInitialized = true;
+  } else {
+    threeRenderer.setSize(w, h, false);
+    threeCamera.aspect = w / h;
+    threeCamera.updateProjectionMatrix();
+  }
+  update3D();
+  startAnim3D();
+}
+
+function init3D(canvas, w, h) {
+  threeScene = new THREE.Scene();
+  threeCamera = new THREE.PerspectiveCamera(40, w / h, 0.1, 100);
+  threeRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  threeRenderer.setSize(w, h, false);
+  threeRenderer.setClearColor(0x000000, 0);
+
+  // ライト
+  const ambient = new THREE.AmbientLight(0xffffff, 0.55);
+  threeScene.add(ambient);
+  const dir1 = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir1.position.set(5, 8, 5);
+  threeScene.add(dir1);
+  const dir2 = new THREE.DirectionalLight(0x8899ff, 0.4);
+  dir2.position.set(-5, -3, -5);
+  threeScene.add(dir2);
+
+  // 盤グループ
+  threeCubeGroup = new THREE.Group();
+  threeScene.add(threeCubeGroup);
+
+  // 格子(4x4x4 のセル位置を示すワイヤーフレーム)
+  buildLattice();
+
+  // 駒グループ
+  threePiecesGroup = new THREE.Group();
+  threeCubeGroup.add(threePiecesGroup);
+
+  // リーチ表示グループ
+  threeHighlightGroup = new THREE.Group();
+  threeCubeGroup.add(threeHighlightGroup);
+
+  setupInteraction(canvas);
+  applyCamera();
+}
+
+function buildLattice() {
+  // 4x4x4 全セルに薄いワイヤーの立方体を置く
+  const cellSize = 1.4;
+  const offset = (cellSize * 3) / 2; // 中央合わせ
+
+  // 各階の床線(薄い)
+  for (let l = 0; l < 4; l++) {
+    const y = l * cellSize - offset;
+    // 階の平面ワイヤー
+    const geo = new THREE.BufferGeometry();
+    const pts = [];
+    // row方向の線
+    for (let r = 0; r <= 3; r++) {
+      const z = r * cellSize - offset - cellSize/2;
+      pts.push(-offset - cellSize/2, y - cellSize/2, z, offset + cellSize/2, y - cellSize/2, z);
+    }
+    for (let r = 0; r <= 3; r++) {
+      const z = r * cellSize - offset + cellSize/2;
+      pts.push(-offset - cellSize/2, y - cellSize/2, z, offset + cellSize/2, y - cellSize/2, z);
+    }
+    // col方向の線
+    for (let c = 0; c <= 3; c++) {
+      const x = c * cellSize - offset - cellSize/2;
+      pts.push(x, y - cellSize/2, -offset - cellSize/2, x, y - cellSize/2, offset + cellSize/2);
+    }
+    for (let c = 0; c <= 3; c++) {
+      const x = c * cellSize - offset + cellSize/2;
+      pts.push(x, y - cellSize/2, -offset - cellSize/2, x, y - cellSize/2, offset + cellSize/2);
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: l === 0 ? 0x6c7ae0 : 0x3a3e6e,
+      transparent: true,
+      opacity: l === 0 ? 0.55 : 0.28
+    });
+    threeCubeGroup.add(new THREE.LineSegments(geo, mat));
+  }
+
+  // 縦方向の支柱(4x4 = 16本)
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const x = c * cellSize - offset;
+      const z = r * cellSize - offset;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute([
+        x, -offset - cellSize/2, z,
+        x, 3 * cellSize - offset + cellSize/2 - cellSize, z
+      ], 3));
+      const mat = new THREE.LineBasicMaterial({
+        color: 0x3a3e6e,
+        transparent: true,
+        opacity: 0.2
+      });
+      threeCubeGroup.add(new THREE.LineSegments(geo, mat));
+    }
+  }
+}
+
+function update3D() {
+  if (!threeInitialized) return;
+  if ($('gameScreen').hidden) return;
+
+  // 駒を再配置
+  while (threePiecesGroup.children.length) {
+    const o = threePiecesGroup.children[0];
+    threePiecesGroup.remove(o);
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+  while (threeHighlightGroup.children.length) {
+    const o = threeHighlightGroup.children[0];
+    threeHighlightGroup.remove(o);
+    if (o.geometry) o.geometry.dispose();
+    if (o.material) o.material.dispose();
+  }
+
+  const cellSize = 1.4;
+  const offset = (cellSize * 3) / 2;
+  const lastMove = history[history.length - 1];
+
+  // 駒
+  const sphereGeo = new THREE.SphereGeometry(0.45, 24, 18);
+  for (let l = 0; l < 4; l++) {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const v = board[l][r][c];
+        if (v === 0) continue;
+        const isWinning = winningLine && winningLine.some(p => p.l===l && p.r===r && p.c===c);
+        const isLast = lastMove && lastMove.l === l && lastMove.r === r && lastMove.c === c;
+        let mat;
+        if (v === 1) {
+          // 黒
+          mat = new THREE.MeshPhongMaterial({
+            color: 0x1a1a2e,
+            emissive: isWinning ? 0xffc940 : (isLast ? 0x667eea : 0x000000),
+            emissiveIntensity: isWinning ? 0.5 : (isLast ? 0.35 : 0),
+            shininess: 60,
+            specular: 0x555577
+          });
+        } else {
+          // 白
+          mat = new THREE.MeshPhongMaterial({
+            color: 0xf0f0fa,
+            emissive: isWinning ? 0xffc940 : (isLast ? 0x667eea : 0x000000),
+            emissiveIntensity: isWinning ? 0.5 : (isLast ? 0.35 : 0),
+            shininess: 80,
+            specular: 0xffffff
+          });
+        }
+        const mesh = new THREE.Mesh(sphereGeo.clone(), mat);
+        mesh.position.set(
+          c * cellSize - offset,
+          l * cellSize - offset,
+          r * cellSize - offset
+        );
+        threePiecesGroup.add(mesh);
+      }
+    }
+  }
+
+  // リーチ表示(試合中のみ)
+  if (myRole && !gameOver) {
+    const threats = findThreats();
+    drawThreatLines(threats.mine, 0x6ee7b7, cellSize, offset);  // 自分のリーチ = 緑
+    drawThreatLines(threats.opp, 0xff7a8a, cellSize, offset);   // 相手のリーチ = 赤
+  }
+
+  // 勝利ライン表示
+  if (winningLine) {
+    drawThreatLines([winningLine], 0xffd700, cellSize, offset, true);
+  }
+}
+
+function drawThreatLines(lines, color, cellSize, offset, fat) {
+  for (const line of lines) {
+    // 線
+    const pts = line.map(p => new THREE.Vector3(
+      p.c * cellSize - offset,
+      p.l * cellSize - offset,
+      p.r * cellSize - offset
+    ));
+    const geo = new THREE.BufferGeometry().setFromPoints([pts[0], pts[3]]);
+    const mat = new THREE.LineBasicMaterial({
+      color: color,
+      transparent: true,
+      opacity: fat ? 0.95 : 0.7,
+      linewidth: 2
+    });
+    threeHighlightGroup.add(new THREE.Line(geo, mat));
+
+    // 各点にリングを出して強調
+    const ringGeo = new THREE.TorusGeometry(0.55, 0.06, 8, 24);
+    for (const pt of pts) {
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: color,
+        transparent: true,
+        opacity: fat ? 0.9 : 0.6
+      });
+      const ring = new THREE.Mesh(ringGeo.clone(), ringMat);
+      ring.position.copy(pt);
+      // 常にカメラを向く
+      ring.lookAt(0, 0, 10);
+      threeHighlightGroup.add(ring);
+    }
+  }
+}
+
+function applyCamera() {
+  if (!threeCamera) return;
+  // 球面座標でカメラ位置を計算
+  const y = Math.sin(camRotX) * camDist;
+  const r = Math.cos(camRotX) * camDist;
+  const x = Math.sin(camRotY) * r;
+  const z = Math.cos(camRotY) * r;
+  threeCamera.position.set(x, y, z);
+  threeCamera.lookAt(0, 0, 0);
+}
+
+function startAnim3D() {
+  if (threeAnimId) return;
+  const tick = () => {
+    if ($('gameScreen').hidden || !threeInitialized) {
+      threeAnimId = null;
+      return;
+    }
+    // リーチリングをカメラに向ける
+    if (threeHighlightGroup) {
+      for (const obj of threeHighlightGroup.children) {
+        if (obj.geometry && obj.geometry.type === 'TorusGeometry') {
+          obj.lookAt(threeCamera.position);
+        }
+      }
+    }
+    threeRenderer.render(threeScene, threeCamera);
+    threeAnimId = requestAnimationFrame(tick);
+  };
+  threeAnimId = requestAnimationFrame(tick);
+}
+
+function stopAnim3D() {
+  if (threeAnimId) { cancelAnimationFrame(threeAnimId); threeAnimId = null; }
+}
+
+function setupInteraction(canvas) {
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+  let pinchDist = 0;
+
+  const onStart = (e) => {
+    e.preventDefault();
+    if (e.touches) {
+      if (e.touches.length === 1) {
+        dragging = true;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+      } else if (e.touches.length === 2) {
+        dragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchDist = Math.hypot(dx, dy);
+      }
+    } else {
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+    }
+  };
+  const onMove = (e) => {
+    if (e.touches) {
+      if (e.touches.length === 1 && dragging) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - lastX;
+        const dy = e.touches[0].clientY - lastY;
+        lastX = e.touches[0].clientX;
+        lastY = e.touches[0].clientY;
+        applyDrag(dx, dy);
+      } else if (e.touches.length === 2) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        if (pinchDist > 0) {
+          const delta = dist - pinchDist;
+          camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist - delta * 0.03));
+          applyCamera();
+        }
+        pinchDist = dist;
+      }
+    } else if (dragging) {
+      e.preventDefault();
+      const dx = e.clientX - lastX;
+      const dy = e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      applyDrag(dx, dy);
+    }
+  };
+  const onEnd = () => { dragging = false; pinchDist = 0; };
+
+  function applyDrag(dx, dy) {
+    camRotY -= dx * 0.008;
+    camRotX -= dy * 0.008;
+    // pitch を ±80° に制限
+    const lim = Math.PI * 0.48;
+    if (camRotX > lim) camRotX = lim;
+    if (camRotX < -lim) camRotX = -lim;
+    applyCamera();
+  }
+
+  canvas.addEventListener('mousedown', onStart);
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onEnd);
+  canvas.addEventListener('touchstart', onStart, {passive: false});
+  canvas.addEventListener('touchmove', onMove, {passive: false});
+  canvas.addEventListener('touchend', onEnd);
+  canvas.addEventListener('touchcancel', onEnd);
+
+  // ホイールでズーム
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    camDist = Math.max(CAM_DIST_MIN, Math.min(CAM_DIST_MAX, camDist + e.deltaY * 0.01));
+    applyCamera();
+  }, {passive: false});
+}
+
+function resetCamera() {
+  camRotX = -0.45;
+  camRotY = 0.6;
+  camDist = 11;
+  applyCamera();
+}
+
+window.addEventListener('resize', () => {
+  setTimeout(initOrResize3D, 100);
+});
 
 // ============================================================
 // WIRE UP
@@ -1151,13 +1581,13 @@ $('undoBtn').addEventListener('click', undoAction);
 $('leaveBtn').addEventListener('click', leaveAndReturn);
 $('modalNewBtn').addEventListener('click', newGameAction);
 $('modalCloseBtn').addEventListener('click', hideModal);
+$('view3dReset').addEventListener('click', resetCamera);
 $('modal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) hideModal();
 });
 window.addEventListener('beforeunload', () => {
   try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
 });
-
 setInterval(() => {
   if (mode === 'online' && !partnerId && ws && ws.readyState === 1) {
     sendRaw({type: 'hello', from: MY_ID});
