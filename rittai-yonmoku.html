@@ -523,7 +523,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19i — 3D view + axes</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19j — MQTT</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -618,6 +618,7 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 (function() {
 const $ = id => document.getElementById(id);
@@ -702,70 +703,132 @@ function stopElapsed() {
 }
 
 // ============================================================
-// WEBSOCKET
+// MQTT (broker.emqx.io / broker.hivemq.com / test.mosquitto.org)
 // ============================================================
+const MQTT_BROKERS = [
+  'wss://broker.emqx.io:8084/mqtt',
+  'wss://broker.hivemq.com:8884/mqtt',
+  'wss://test.mosquitto.org:8081/mqtt'
+];
+let currentBrokerIdx = 0;
+let mqttClient = null;
+const MQTT_TOPIC = 'rttymk/' + TOPIC;  // MQTTではスラッシュが階層区切り
+
 function connectWs() {
   if (mode !== 'online') return;
+  if (typeof mqtt === 'undefined') {
+    logMsg('❌ mqtt.js ライブラリ未読み込み');
+    setWsState('down', 'ライブラリエラー');
+    setTimeout(() => connectWs(), 3000);
+    return;
+  }
   clearTimeout(reconnectTimer);
-  const wsUrl = `wss://ntfy.sh/${TOPIC}/ws`;
+
+  const brokerUrl = MQTT_BROKERS[currentBrokerIdx];
+  logMsg(`MQTT接続試行: ${brokerUrl}`);
   setWsState('', '接続中…');
-  try { ws = new WebSocket(wsUrl); }
-  catch (e) { logMsg('WS作成失敗: ' + e); scheduleReconnect(); return; }
-  ws.onopen = () => {
-    logMsg('✓ WS接続成功');
+
+  try {
+    mqttClient = mqtt.connect(brokerUrl, {
+      clientId: 'rttymk_' + MY_ID,
+      clean: true,
+      connectTimeout: 10000,
+      keepalive: 30,
+      reconnectPeriod: 0  // 自前で再接続制御
+    });
+  } catch (e) {
+    logMsg('MQTT作成失敗: ' + e);
+    tryNextBroker();
+    return;
+  }
+
+  mqttClient.on('connect', () => {
+    logMsg(`✓ MQTT接続成功 (${brokerUrl.split('/')[2]})`);
     wsBackoff = 1000;
-    setWsState('up', 'ntfy.sh に接続中');
+    setWsState('up', 'MQTT接続中 (' + brokerUrl.split('/')[2].split(':')[0] + ')');
     setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
-    sendRaw({type: 'hello', from: MY_ID});
-    startHeartbeat();
-  };
-  ws.onmessage = (event) => {
+
+    mqttClient.subscribe(MQTT_TOPIC, { qos: 0 }, (err) => {
+      if (err) { logMsg('subscribe失敗: ' + err); return; }
+      logMsg(`subscribe OK: ${MQTT_TOPIC}`);
+      // subscribeしてからHELLO送信
+      setTimeout(() => {
+        sendRaw({type: 'hello', from: MY_ID});
+        startHeartbeat();
+      }, 300);
+    });
+  });
+
+  mqttClient.on('message', (topic, payload) => {
+    if (topic !== MQTT_TOPIC) return;
     try {
-      const obj = JSON.parse(event.data);
-      if (obj.event === 'open') return;
-      if (obj.event === 'keepalive') return;
-      if (obj.event === 'message' && obj.message) {
-        let msg;
-        try { msg = JSON.parse(obj.message); } catch (e) { return; }
-        handleMessage(msg);
-      }
-    } catch (e) { logMsg('受信エラー: ' + e); }
-  };
-  ws.onerror = () => { logMsg('⚠ WSエラー'); setWsState('down', 'エラー'); };
-  ws.onclose = () => {
-    logMsg('× WS切断');
+      const msg = JSON.parse(payload.toString());
+      handleMessage(msg);
+    } catch (e) { logMsg('メッセージパース失敗: ' + e); }
+  });
+
+  mqttClient.on('error', (err) => {
+    logMsg('⚠ MQTTエラー: ' + (err && err.message || err));
+    setWsState('down', 'エラー');
+  });
+
+  mqttClient.on('close', () => {
+    logMsg('× MQTT切断');
     setWsState('down', '切断 — 再接続します');
     stopHeartbeat();
     scheduleReconnect();
-  };
+  });
+
+  mqttClient.on('offline', () => {
+    logMsg('⚠ MQTT offline');
+  });
 }
+
+function tryNextBroker() {
+  currentBrokerIdx = (currentBrokerIdx + 1) % MQTT_BROKERS.length;
+  logMsg(`次のブローカーを試行: ${MQTT_BROKERS[currentBrokerIdx]}`);
+  setTimeout(() => connectWs(), 2000);
+}
+
 function scheduleReconnect() {
   if (mode !== 'online') return;
   reconnectTimer = setTimeout(() => {
-    wsBackoff = Math.min(wsBackoff * 2, 10000);
-    connectWs();
+    wsBackoff = Math.min(wsBackoff * 2, 15000);
+    // 複数回失敗したら別のブローカーを試す
+    if (wsBackoff >= 8000) {
+      tryNextBroker();
+    } else {
+      connectWs();
+    }
   }, wsBackoff);
 }
+
 function startHeartbeat() {
   stopHeartbeat();
+  // MQTT自体のkeepaliveがあるので、アプリ層のpingは控えめに
   heartbeatTimer = setInterval(() => {
-    sendRaw({type: 'ping', from: MY_ID});
     if (partnerId && lastHeartbeatFromPartner > 0) {
-      if (Date.now() - lastHeartbeatFromPartner > 25000) {
+      if (Date.now() - lastHeartbeatFromPartner > 90000) {
+        logMsg('⚠ 相手から90秒以上応答なし');
         handlePartnerLeave();
       }
     }
-  }, 8000);
+  }, 15000);
 }
 function stopHeartbeat() {
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 }
+
 function sendRaw(obj) {
-  fetch(`https://ntfy.sh/${TOPIC}`, {
-    method: 'POST',
-    body: JSON.stringify(obj),
-    headers: {'Content-Type': 'text/plain'}
-  }).catch(e => logMsg('送信失敗: ' + e));
+  if (!mqttClient || !mqttClient.connected) {
+    logMsg('⚠ MQTT未接続で送信スキップ');
+    return;
+  }
+  try {
+    mqttClient.publish(MQTT_TOPIC, JSON.stringify(obj), { qos: 0 }, (err) => {
+      if (err) logMsg('publish失敗: ' + err);
+    });
+  } catch (e) { logMsg('送信例外: ' + e); }
 }
 
 // ============================================================
@@ -943,11 +1006,12 @@ function updateNetInfo(connected) {
 }
 
 function leaveOnline() {
-  if (ws) {
+  if (mqttClient) {
     try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
-    try { ws.close(); } catch (e) {}
-    ws = null;
+    try { mqttClient.end(true); } catch (e) {}
+    mqttClient = null;
   }
+  ws = null;
   stopHeartbeat();
   stopElapsed();
   clearTimeout(reconnectTimer);
@@ -970,7 +1034,7 @@ function leaveAndReturn() {
 function startOnline() {
   mode = 'online';
   setError('');
-  setStatus('ntfy.sh に接続中…');
+  setStatus('中継サーバーに接続中…');
   showConnecting();
   startElapsed();
   connectWs();
@@ -1768,10 +1832,10 @@ window.addEventListener('beforeunload', () => {
   try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
 });
 setInterval(() => {
-  if (mode === 'online' && !partnerId && ws && ws.readyState === 1) {
+  if (mode === 'online' && !partnerId && mqttClient && mqttClient.connected) {
     sendRaw({type: 'hello', from: MY_ID});
   }
-}, 5000);
+}, 15000);
 
 init();
 startOnline();
