@@ -33,14 +33,18 @@
     align-items: center;
     padding: max(10px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
   }
-  .build-tag {
-    position: fixed;
-    bottom: 4px;
-    right: 6px;
-    font-size: 9px;
-    color: rgba(255,255,255,0.25);
-    font-family: monospace;
-    z-index: 1;
+  .build-banner {
+    width: 100%;
+    max-width: 480px;
+    background: linear-gradient(90deg, #f5576c, #f093fb);
+    color: #fff;
+    text-align: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    font-family: 'SF Mono','Menlo','Monaco',monospace;
   }
 
   .screen {
@@ -76,11 +80,7 @@
     color: rgba(255,255,255,0.55);
     margin-bottom: 22px;
   }
-  .loading-dots {
-    display: inline-flex;
-    gap: 6px;
-    margin-bottom: 14px;
-  }
+  .loading-dots { display: inline-flex; gap: 6px; margin-bottom: 14px; }
   .loading-dots span {
     width: 10px; height: 10px;
     border-radius: 50%;
@@ -101,7 +101,30 @@
     margin-top: 8px;
     line-height: 1.6;
   }
-
+  .ws-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    background: rgba(0,0,0,0.25);
+    font-size: 12px;
+    color: rgba(255,255,255,0.75);
+    margin-top: 16px;
+    font-weight: 500;
+  }
+  .ws-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,200,80,0.8);
+    animation: pulse 1.2s infinite;
+  }
+  .ws-dot.up { background: #6ee7b7; box-shadow: 0 0 6px rgba(110,231,183,0.7); animation: none; }
+  .ws-dot.down { background: #ff8b8b; animation: none; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; }
+    50%      { opacity: 1; }
+  }
   .room-fingerprint {
     font-family: 'SF Mono','Menlo','Monaco',monospace;
     background: rgba(0,0,0,0.3);
@@ -120,41 +143,6 @@
     margin-bottom: 4px;
     letter-spacing: 0.1em;
   }
-
-  .relay-list {
-    margin-top: 12px;
-    text-align: left;
-    background: rgba(0,0,0,0.2);
-    border-radius: 8px;
-    padding: 8px 10px;
-    font-size: 10px;
-    font-family: 'SF Mono','Menlo','Monaco',monospace;
-  }
-  .relay-row {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 0;
-    color: rgba(255,255,255,0.6);
-  }
-  .relay-row .dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    flex-shrink: 0;
-  }
-  .relay-row .dot.up { background: #6ee7b7; box-shadow: 0 0 4px rgba(110,231,183,0.6); }
-  .relay-row .dot.down { background: rgba(255,100,100,0.4); }
-  .relay-row .dot.pending { background: rgba(255,200,80,0.5); animation: pulse 1.2s infinite; }
-  @keyframes pulse {
-    0%, 100% { opacity: 0.5; }
-    50%      { opacity: 1; }
-  }
-  .relay-summary {
-    font-size: 11px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 8px;
-  }
-
   .footer-link {
     margin-top: 18px;
     padding-top: 14px;
@@ -174,7 +162,6 @@
     font-family: inherit;
   }
   .text-btn:active { color: rgba(255,255,255,0.85); }
-
   details.diag {
     margin-top: 14px;
     text-align: left;
@@ -233,7 +220,6 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     margin: 0 auto 8px;
-    transition: all 0.3s;
     min-height: 44px;
   }
   .net-info {
@@ -264,8 +250,6 @@
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 14px;
     padding: 8px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
   }
   .board-label {
     font-size: 11px;
@@ -334,7 +318,6 @@
     font-weight: 600;
     cursor: pointer;
     min-height: 46px;
-    transition: all 0.15s;
     flex: 1;
     font-family: inherit;
   }
@@ -349,7 +332,6 @@
     max-width: 440px;
     padding: 0 8px;
   }
-
   .modal {
     position: fixed;
     inset: 0;
@@ -383,7 +365,6 @@
   .winner-text { font-size: 22px; font-weight: 700; margin-bottom: 18px; }
   .modal-buttons { display: flex; gap: 8px; }
   .modal-buttons button { flex: 1; }
-
   .toast {
     position: fixed;
     bottom: 30px;
@@ -407,7 +388,7 @@
 </head>
 <body>
 
-<div class="build-tag">build 2026-04-19e (nostr-fixed-relays)</div>
+<div class="build-banner">build 2026-04-19f — NO WebRTC — ntfy.sh WebSocket only</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -419,8 +400,10 @@
     </div>
     <div class="status-line" id="statusLine">通信を準備中…</div>
 
-    <div class="relay-list" id="relayList"></div>
-    <div class="relay-summary" id="relaySummary"></div>
+    <div class="ws-badge" id="wsBadge">
+      <div class="ws-dot" id="wsDot"></div>
+      <span id="wsLabel">接続中…</span>
+    </div>
 
     <div class="room-fingerprint-label">対戦の合言葉(両端末で一致してることを確認)</div>
     <div class="room-fingerprint" id="roomFingerprint">--------</div>
@@ -469,10 +452,11 @@
   </div>
 </div>
 
-<script type="module">
+<script>
+(function() {
 const $ = id => document.getElementById(id);
 
-function log(msg) {
+function logMsg(msg) {
   const t = new Date().toLocaleTimeString('ja-JP', {hour12:false});
   const line = `[${t}] ${msg}\n`;
   const el = $('log');
@@ -485,61 +469,16 @@ function setError(msg) {
   if (msg) { el.textContent = msg; el.hidden = false; }
   else { el.textContent = ''; el.hidden = true; }
 }
-
-// ============================================================
-// 信頼できる Nostr リレー(2026年現在の主要リレー)
-// ============================================================
-const NOSTR_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
-  'wss://relay.primal.net',
-  'wss://nostr.wine'
-];
-
-// ============================================================
-// IMPORT - Trystero Nostr (新パッケージ名 → 旧名 にフォールバック)
-// ============================================================
-let joinRoom, selfId, getRelaySockets;
-const importCandidates = [
-  'https://esm.run/@trystero-p2p/nostr',
-  'https://esm.run/trystero@0.23.0/nostr',
-  'https://esm.run/trystero/nostr'
-];
-for (const url of importCandidates) {
-  try {
-    log(`import 試行: ${url}`);
-    const mod = await import(url);
-    joinRoom = mod.joinRoom;
-    selfId = mod.selfId;
-    getRelaySockets = mod.getRelaySockets;
-    log(`✓ 読み込み成功: ${url}`);
-    log(`  selfId: ${selfId.slice(0, 12)}…`);
-    break;
-  } catch (e) {
-    log(`✗ ${url} → ${(e && e.message || e).slice(0, 80)}`);
-  }
-}
-if (!joinRoom) {
-  setStatus('');
-  setError('ライブラリの読み込みに失敗しました。回線を確認してリロードしてください。');
+function setWsState(state, label) {
+  const dot = $('wsDot');
+  const lbl = $('wsLabel');
+  dot.className = 'ws-dot ' + state;
+  lbl.textContent = label;
 }
 
 // ============================================================
-// STATE
-// ============================================================
-let board, currentPlayer, gameOver, history, winningLine;
-let mode = null;
-let myRole = null;
-let room = null;
-let actions = {};
-let partnerPeerId = null;
-let elapsedTimer = null;
-let relayMonitor = null;
-let elapsedSec = 0;
-
-// ============================================================
-// APP_ID & ROOM_NAME
+// TOPIC (ntfy.sh のトピック名)
+// URLに紐づく一意な名前を生成
 // ============================================================
 function normalize(s) {
   return (s || '').toLowerCase()
@@ -547,13 +486,10 @@ function normalize(s) {
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 }
-const URL_KEY = normalize((location.host || 'local') + '_' + (location.pathname || '/'))
-                  .slice(0, 40);
-const APP_ID = 'rttymk-yonmoku-' + URL_KEY;
-const ROOM_NAME = 'main';
-log(`APP_ID = "${APP_ID}"`);
-log(`ROOM   = "${ROOM_NAME}"`);
-log(`明示リレー: ${NOSTR_RELAYS.length} 個`);
+const URL_KEY = normalize((location.host || 'local') + '-' + (location.pathname || '/')).slice(0, 40);
+// ntfyはトピック名がパスワードになるので推測されにくく
+const TOPIC = 'rttymk-yonmoku-v2-' + URL_KEY;
+logMsg(`TOPIC = "${TOPIC}"`);
 
 async function fingerprint(s) {
   try {
@@ -561,10 +497,29 @@ async function fingerprint(s) {
     return Array.from(new Uint8Array(buf)).slice(0, 4).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
   } catch (e) { return s.slice(-8).toUpperCase(); }
 }
-fingerprint(APP_ID + '/' + ROOM_NAME).then(fp => {
+fingerprint(TOPIC).then(fp => {
   $('roomFingerprint').textContent = fp;
-  log(`合言葉 fingerprint = ${fp}`);
+  logMsg(`合言葉 = ${fp}`);
 });
+
+// 自分のID(ランダム) - 同じマシンで2タブ開いても別人扱い
+const MY_ID = Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+logMsg(`自分のID = ${MY_ID}`);
+
+// ============================================================
+// STATE
+// ============================================================
+let board, currentPlayer, gameOver, history, winningLine;
+let mode = null;
+let myRole = null;
+let partnerId = null;
+let ws = null;
+let wsBackoff = 1000;
+let elapsedTimer = null;
+let elapsedSec = 0;
+let heartbeatTimer = null;
+let lastHeartbeatFromPartner = 0;
+let reconnectTimer = null;
 
 // ============================================================
 // SCREEN
@@ -578,13 +533,6 @@ function startElapsed() {
   elapsedTimer = setInterval(() => {
     elapsedSec++;
     $('elapsed').textContent = ` (${elapsedSec}秒)`;
-    if (elapsedSec === 15) {
-      log('⏱ 15秒経過');
-      setStatus('まだ繋がりません。相手も同じURLを開いていますか？');
-    }
-    if (elapsedSec === 45) {
-      setStatus('時間がかかっています。下の「合言葉」が両端末で一致しているか確認してください。');
-    }
   }, 1000);
 }
 function stopElapsed() {
@@ -592,134 +540,198 @@ function stopElapsed() {
   $('elapsed').textContent = '';
 }
 
-function startRelayMonitor() {
-  stopRelayMonitor();
-  // 初期表示: 全リレーを「接続待ち」表示
-  const list = $('relayList');
-  list.innerHTML = '';
-  NOSTR_RELAYS.forEach(url => {
-    const row = document.createElement('div');
-    row.className = 'relay-row';
-    row.dataset.url = url;
-    row.innerHTML = `<div class="dot pending"></div><span>${url.replace('wss://', '')}</span>`;
-    list.appendChild(row);
-  });
-
-  const update = () => {
-    if (!getRelaySockets) return;
-    let sockets;
-    try { sockets = getRelaySockets() || {}; } catch (e) { return; }
-    let upCount = 0;
-    NOSTR_RELAYS.forEach(url => {
-      const ws = sockets[url];
-      const isOpen = ws && ws.readyState === 1;
-      const isFailed = ws && (ws.readyState === 3); // CLOSED
-      if (isOpen) upCount++;
-      const row = list.querySelector(`[data-url="${url}"] .dot`);
-      if (row) {
-        row.className = 'dot ' + (isOpen ? 'up' : (isFailed ? 'down' : 'pending'));
-      }
-    });
-    $('relaySummary').textContent = `中継サーバー ${upCount}/${NOSTR_RELAYS.length} に接続中`;
-  };
-  update();
-  relayMonitor = setInterval(update, 1000);
-}
-function stopRelayMonitor() {
-  if (relayMonitor) { clearInterval(relayMonitor); relayMonitor = null; }
-}
-
 // ============================================================
-// NETWORKING
+// NTFY WEBSOCKET
 // ============================================================
-function startOnline() {
-  if (!joinRoom) return;
-  mode = 'online';
-  setError('');
-  setStatus('Nostr リレーに接続中…');
-  startElapsed();
-  startRelayMonitor();
+function connectWs() {
+  if (mode !== 'online') return;
+  clearTimeout(reconnectTimer);
+
+  const wsUrl = `wss://ntfy.sh/${TOPIC}/ws`;
+  logMsg(`WebSocket 接続試行: ${wsUrl}`);
+  setWsState('', '接続中…');
 
   try {
-    log('joinRoom() 開始 (relayUrls 明示指定)');
-    room = joinRoom({
-      appId: APP_ID,
-      relayUrls: NOSTR_RELAYS  // 明示指定で両端末が必ず同じリレーに繋がる
-    }, ROOM_NAME);
-    log('joinRoom() OK');
-    setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
+    ws = new WebSocket(wsUrl);
   } catch (e) {
-    log('❌ joinRoom 失敗: ' + (e && e.message || e));
-    setError('ネットワーク初期化に失敗しました');
-    stopElapsed();
+    logMsg('WebSocket 作成失敗: ' + e);
+    scheduleReconnect();
     return;
   }
 
-  const [sendMove, onMove] = room.makeAction('move');
-  const [sendReset, onReset] = room.makeAction('reset');
-  const [sendUndo, onUndo] = room.makeAction('undo');
-  actions = { sendMove, sendReset, sendUndo };
+  ws.onopen = () => {
+    logMsg('✓ WebSocket 接続成功');
+    wsBackoff = 1000;
+    setWsState('up', 'ntfy.sh に接続中');
+    setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
+    // HELLO 送信 (既存のピアに自分の存在を知らせる)
+    sendRaw({type: 'hello', from: MY_ID});
+    startHeartbeat();
+  };
 
-  onMove((data, peerId) => {
-    if (peerId !== partnerPeerId) return;
-    if (data && typeof data.row === 'number' && typeof data.col === 'number') {
-      doMove(data.row, data.col, true);
+  ws.onmessage = (event) => {
+    try {
+      const obj = JSON.parse(event.data);
+      // ntfy は最初に {event: "open"} を送ってくる
+      if (obj.event === 'open') {
+        logMsg('ntfyサブスクリプション開始');
+        return;
+      }
+      if (obj.event === 'keepalive') return;
+      if (obj.event === 'message' && obj.message) {
+        let msg;
+        try { msg = JSON.parse(obj.message); }
+        catch (e) { return; }
+        handleMessage(msg);
+      }
+    } catch (e) {
+      logMsg('受信エラー: ' + e);
     }
-  });
-  onReset((_, peerId) => {
-    if (peerId !== partnerPeerId) return;
-    init(); hideModal();
-  });
-  onUndo((_, peerId) => {
-    if (peerId !== partnerPeerId) return;
-    doUndo(true);
-  });
+  };
 
-  room.onPeerJoin(peerId => {
-    log(`✓ ピア発見: ${peerId.slice(0, 12)}…`);
-    if (partnerPeerId !== null) {
-      log('⚠ 既に対戦中のため無視');
-      return;
-    }
-    partnerPeerId = peerId;
-    myRole = (selfId < peerId) ? 1 : 2;
-    log(`役割: あなた=${myRole === 1 ? '⚫黒(先手)' : '⚪白(後手)'}`);
-    onConnected();
-  });
+  ws.onerror = (e) => {
+    logMsg('⚠ WebSocket エラー');
+    setWsState('down', 'エラー');
+  };
 
-  room.onPeerLeave(peerId => {
-    log(`× ピア退出: ${peerId.slice(0, 12)}…`);
-    if (peerId === partnerPeerId) {
-      partnerPeerId = null;
-      myRole = null;
-      onDisconnected();
-    }
-  });
+  ws.onclose = () => {
+    logMsg('× WebSocket 切断');
+    setWsState('down', '切断 — 再接続します');
+    stopHeartbeat();
+    scheduleReconnect();
+  };
 }
 
-async function leaveOnline() {
-  stopElapsed();
-  stopRelayMonitor();
-  if (room) {
-    try { await room.leave(); } catch (e) {}
-    room = null;
+function scheduleReconnect() {
+  if (mode !== 'online') return;
+  logMsg(`${wsBackoff}ms 後に再接続`);
+  reconnectTimer = setTimeout(() => {
+    wsBackoff = Math.min(wsBackoff * 2, 10000);
+    connectWs();
+  }, wsBackoff);
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    sendRaw({type: 'ping', from: MY_ID});
+    // パートナーの生存チェック
+    if (partnerId && lastHeartbeatFromPartner > 0) {
+      const silent = Date.now() - lastHeartbeatFromPartner;
+      if (silent > 25000) {
+        logMsg('⚠ 相手から25秒以上応答なし → 切断扱い');
+        handlePartnerLeave();
+      }
+    }
+  }, 8000);
+}
+function stopHeartbeat() {
+  if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
+}
+
+function sendRaw(obj) {
+  // ntfy.sh への publish は HTTP POST で行う(WebSocket は読み取り専用)
+  const body = JSON.stringify(obj);
+  fetch(`https://ntfy.sh/${TOPIC}`, {
+    method: 'POST',
+    body: body,
+    headers: {'Content-Type': 'text/plain'}
+  }).catch(e => logMsg('送信失敗: ' + e));
+}
+
+// ============================================================
+// PROTOCOL
+// ============================================================
+function handleMessage(msg) {
+  if (!msg || !msg.from) return;
+  if (msg.from === MY_ID) return; // 自分のメッセージは無視
+
+  if (msg.type === 'hello') {
+    logMsg(`← HELLO from ${msg.from.slice(0, 10)}`);
+    if (!partnerId) {
+      // 新しいピア発見
+      pairWith(msg.from);
+      // 自分も HELLO を返して相手に見つけてもらう
+      sendRaw({type: 'hello-ack', from: MY_ID, to: msg.from});
+    } else if (partnerId !== msg.from) {
+      // 既に対戦中なのに別の人が来た → 無視
+      logMsg('⚠ 既に対戦中のため新規ピアを無視');
+    }
+    return;
   }
-  actions = {};
-  partnerPeerId = null;
-  myRole = null;
+  if (msg.type === 'hello-ack') {
+    if (msg.to !== MY_ID) return;
+    logMsg(`← HELLO-ACK from ${msg.from.slice(0, 10)}`);
+    if (!partnerId) pairWith(msg.from);
+    return;
+  }
+  if (msg.type === 'ping') {
+    if (msg.from === partnerId) {
+      lastHeartbeatFromPartner = Date.now();
+    }
+    return;
+  }
+
+  // 以下はペア確立後のみ処理
+  if (msg.from !== partnerId) return;
+  lastHeartbeatFromPartner = Date.now();
+
+  if (msg.type === 'move') {
+    doMove(msg.row, msg.col, true);
+  } else if (msg.type === 'reset') {
+    init(); hideModal();
+  } else if (msg.type === 'undo') {
+    doUndo(true);
+  } else if (msg.type === 'bye') {
+    handlePartnerLeave();
+  }
 }
 
-function send(msg) {
-  if (!partnerPeerId) return;
-  try {
-    if (msg.type === 'move' && actions.sendMove) {
-      actions.sendMove({ row: msg.row, col: msg.col }, partnerPeerId);
-    } else if (msg.type === 'reset' && actions.sendReset) {
-      actions.sendReset({ ts: Date.now() }, partnerPeerId);
-    } else if (msg.type === 'undo' && actions.sendUndo) {
-      actions.sendUndo({ ts: Date.now() }, partnerPeerId);
-    }
-  } catch (e) { log('送信失敗: ' + e); }
+function pairWith(peerId) {
+  partnerId = peerId;
+  lastHeartbeatFromPartner = Date.now();
+  myRole = (MY_ID < peerId) ? 1 : 2;
+  logMsg(`✓ ピア確定: ${peerId.slice(0, 10)} / 役割: ${myRole === 1 ? '⚫黒(先手)' : '⚪白(後手)'}`);
+  onConnected();
+}
+
+function handlePartnerLeave() {
+  if (!partnerId) return;
+  logMsg('× 相手が退出');
+  partnerId = null;
+  myRole = null;
+  updateNetInfo(false);
+  gameOver = true;
+  render();
+  // 新しい相手を待ち始める
+  mode = 'online';
+  showWait();
+  startElapsed();
+  setStatus('相手が退出しました。新しい相手を待っています…');
+}
+
+// ============================================================
+// ACTIONS
+// ============================================================
+function startOnline() {
+  mode = 'online';
+  setError('');
+  setStatus('ntfy.sh に接続中…');
+  startElapsed();
+  connectWs();
+}
+
+function leaveOnline() {
+  if (ws) {
+    try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
+    try { ws.close(); } catch (e) {}
+    ws = null;
+  }
+  stopHeartbeat();
+  stopElapsed();
+  clearTimeout(reconnectTimer);
+  partnerId = null;
+  myRole = null;
 }
 
 function onConnected() {
@@ -730,18 +742,8 @@ function onConnected() {
   toast(`接続完了 — あなたは ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`, 2500);
 }
 
-function onDisconnected() {
-  if (mode !== 'online') return;
-  updateNetInfo(false);
-  gameOver = true;
-  render();
-}
-
 function updateNetInfo(connected) {
-  if (mode !== 'online') {
-    $('netInfo').hidden = true;
-    return;
-  }
+  if (mode !== 'online') { $('netInfo').hidden = true; return; }
   $('netInfo').hidden = false;
   const ns = $('netStatus');
   if (connected) {
@@ -754,8 +756,8 @@ function updateNetInfo(connected) {
   $('myRoleDisplay').textContent = `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`;
 }
 
-async function leaveAndReturn() {
-  await leaveOnline();
+function leaveAndReturn() {
+  leaveOnline();
   mode = null;
   $('netInfo').hidden = true;
   showWait();
@@ -788,7 +790,7 @@ function init() {
 function newGameAction() {
   init();
   hideModal();
-  if (mode === 'online') send({type:'reset'});
+  if (mode === 'online') sendRaw({type:'reset', from: MY_ID});
 }
 function undoAction() { doUndo(false); }
 
@@ -800,14 +802,14 @@ function doUndo(fromNet) {
   currentPlayer = currentPlayer === 1 ? 2 : 1;
   render();
   updateStatus();
-  if (!fromNet && mode === 'online') send({type:'undo'});
+  if (!fromNet && mode === 'online') sendRaw({type:'undo', from: MY_ID});
 }
 
 function attemptDrop(row, col) {
   if (gameOver) return;
   if (mode === 'online') {
     if (currentPlayer !== myRole) return;
-    if (!partnerPeerId) return;
+    if (!partnerId) return;
   }
   doMove(row, col, false);
 }
@@ -833,7 +835,7 @@ function doMove(row, col, fromNet) {
         render();
         updateStatus();
       }
-      if (!fromNet && mode === 'online') send({type:'move', row, col});
+      if (!fromNet && mode === 'online') sendRaw({type:'move', from: MY_ID, row, col});
       return;
     }
   }
@@ -886,7 +888,7 @@ function render() {
   container.innerHTML = '';
   const lastMove = history[history.length - 1];
   const isMyTurn = mode === 'offline' || currentPlayer === myRole;
-  const netReady = mode === 'offline' || !!partnerPeerId;
+  const netReady = mode === 'offline' || !!partnerId;
   const canTap = !gameOver && isMyTurn && netReady;
 
   for (let l = 0; l < 4; l++) {
@@ -982,9 +984,19 @@ $('modalCloseBtn').addEventListener('click', hideModal);
 $('modal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) hideModal();
 });
-window.addEventListener('beforeunload', () => { if (room) try { room.leave(); } catch(e) {} });
+window.addEventListener('beforeunload', () => {
+  try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
+});
 
-if (joinRoom) startOnline();
+// 定期 HELLO 再送 (相手が後から来た場合の発見用)
+setInterval(() => {
+  if (mode === 'online' && !partnerId && ws && ws.readyState === 1) {
+    sendRaw({type: 'hello', from: MY_ID});
+  }
+}, 5000);
+
+startOnline();
+})();
 </script>
 </body>
 </html>
