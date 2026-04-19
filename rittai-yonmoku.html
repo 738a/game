@@ -395,7 +395,7 @@
 </head>
 <body>
 
-<div class="build-tag">build 2026-04-19d (torrent)</div>
+<div class="build-tag">build 2026-04-19e (torrent v2)</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -475,20 +475,37 @@ function setError(msg) {
 }
 
 // ============================================================
-// IMPORT - Trystero with TORRENT strategy (most stable for public use)
+// IMPORT - Trystero v0.23 では @trystero-p2p/torrent が新しい場所
+// 複数のCDNを試して、どれかで成功させる
 // ============================================================
 let joinRoom, selfId, getRelaySockets;
-try {
-  setStatus('ライブラリを読み込み中…');
-  const mod = await import('https://esm.run/trystero@0.23.0/torrent');
-  joinRoom = mod.joinRoom;
-  selfId = mod.selfId;
-  getRelaySockets = mod.getRelaySockets;
-  log(`ライブラリ読み込み成功 (selfId: ${selfId.slice(0, 12)}…)`);
-} catch (e) {
-  log('❌ ライブラリ読込失敗: ' + (e && e.message || e));
+const CDN_ATTEMPTS = [
+  'https://esm.run/@trystero-p2p/torrent',
+  'https://esm.sh/@trystero-p2p/torrent',
+  'https://cdn.jsdelivr.net/npm/@trystero-p2p/torrent/+esm',
+];
+setStatus('ライブラリを読み込み中…');
+for (const url of CDN_ATTEMPTS) {
+  try {
+    log(`import 試行: ${url}`);
+    const mod = await import(url);
+    joinRoom = mod.joinRoom;
+    selfId = mod.selfId;
+    getRelaySockets = mod.getRelaySockets;
+    if (joinRoom && selfId) {
+      log(`✓ 読み込み成功 (selfId: ${selfId.slice(0, 12)}…)`);
+      break;
+    } else {
+      log(`このCDNからjoinRoom/selfIdが取れず`);
+      joinRoom = null;
+    }
+  } catch (e) {
+    log(`× 失敗: ${e && e.message || e}`);
+  }
+}
+if (!joinRoom) {
   setStatus('');
-  setError('ライブラリの読み込みに失敗しました。回線を確認してリロードしてください。');
+  setError('すべてのCDNからのライブラリ読み込みに失敗しました。回線・ファイアウォールを確認してリロードしてください。');
 }
 
 // ============================================================
