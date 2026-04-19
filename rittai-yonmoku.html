@@ -49,7 +49,7 @@
 
   .screen {
     width: 100%;
-    max-width: 380px;
+    max-width: 400px;
     margin: auto 0;
     flex: 1;
     display: flex;
@@ -60,7 +60,7 @@
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 20px;
-    padding: 28px 22px;
+    padding: 26px 20px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     text-align: center;
@@ -101,6 +101,7 @@
     margin-top: 8px;
     line-height: 1.6;
   }
+
   .ws-badge {
     display: inline-flex;
     align-items: center;
@@ -125,24 +126,84 @@
     0%, 100% { opacity: 0.4; }
     50%      { opacity: 1; }
   }
-  .room-fingerprint {
-    font-family: 'SF Mono','Menlo','Monaco',monospace;
-    background: rgba(0,0,0,0.3);
-    padding: 8px 10px;
-    border-radius: 8px;
+
+  .setup-section { margin-top: 20px; text-align: left; }
+  .setup-label {
     font-size: 12px;
-    margin-top: 14px;
-    color: #b8c5ff;
-    letter-spacing: 0.05em;
-    border: 1px solid rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.6);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    text-align: center;
   }
-  .room-fingerprint-label {
-    font-size: 10px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 14px;
-    margin-bottom: 4px;
-    letter-spacing: 0.1em;
+  .choice-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 14px;
   }
+  .choice-btn {
+    padding: 14px 10px;
+    background: rgba(0,0,0,0.2);
+    border: 1.5px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s;
+    min-height: 54px;
+  }
+  .choice-btn:active { transform: scale(0.96); }
+  .choice-btn.selected {
+    background: rgba(118, 75, 162, 0.35);
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 1px #a78bfa, 0 4px 16px rgba(118,75,162,0.3);
+  }
+  .choice-piece {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .start-btn {
+    width: 100%;
+    margin-top: 8px;
+    padding: 14px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border: none;
+    border-radius: 14px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    min-height: 52px;
+  }
+  .start-btn:active { transform: scale(0.97); }
+  .start-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .waiting-banner {
+    margin-top: 14px;
+    padding: 10px 14px;
+    background: rgba(255,200,80,0.12);
+    border: 1px solid rgba(255,200,80,0.3);
+    border-radius: 10px;
+    font-size: 12px;
+    color: rgba(255,220,150,0.9);
+    line-height: 1.5;
+  }
+  .partner-choice-hint {
+    font-size: 11px;
+    color: rgba(255,255,255,0.45);
+    margin-top: 6px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
   .footer-link {
     margin-top: 18px;
     padding-top: 14px;
@@ -162,6 +223,7 @@
     font-family: inherit;
   }
   .text-btn:active { color: rgba(255,255,255,0.85); }
+
   details.diag {
     margin-top: 14px;
     text-align: left;
@@ -189,12 +251,7 @@
     word-break: break-all;
     line-height: 1.5;
   }
-  .err {
-    color: #ff8b8b;
-    font-size: 13px;
-    margin-top: 14px;
-    line-height: 1.6;
-  }
+  .err { color: #ff8b8b; font-size: 13px; margin-top: 14px; line-height: 1.6; }
 
   .header { width: 100%; max-width: 480px; text-align: center; padding: 4px 0 8px; }
   .header h1 {
@@ -388,25 +445,45 @@
 </head>
 <body>
 
-<div class="build-banner">build 2026-04-19f — NO WebRTC — ntfy.sh WebSocket only</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19g — ntfy.sh WebSocket</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
     <div class="brand">立体四目</div>
     <div class="subtitle">遠隔で2人対戦</div>
-    <div class="loading-dots"><span></span><span></span><span></span></div>
-    <div class="wait-headline" id="waitHeadline">
-      対戦相手を待っています<span class="elapsed" id="elapsed"></span>
-    </div>
-    <div class="status-line" id="statusLine">通信を準備中…</div>
 
-    <div class="ws-badge" id="wsBadge">
-      <div class="ws-dot" id="wsDot"></div>
-      <span id="wsLabel">接続中…</span>
+    <div id="connectingBlock">
+      <div class="loading-dots"><span></span><span></span><span></span></div>
+      <div class="wait-headline" id="waitHeadline">
+        対戦相手を待っています<span class="elapsed" id="elapsed"></span>
+      </div>
+      <div class="status-line" id="statusLine">通信を準備中…</div>
+      <div class="ws-badge">
+        <div class="ws-dot" id="wsDot"></div>
+        <span id="wsLabel">接続中…</span>
+      </div>
     </div>
 
-    <div class="room-fingerprint-label">対戦の合言葉(両端末で一致してることを確認)</div>
-    <div class="room-fingerprint" id="roomFingerprint">--------</div>
+    <div id="setupBlock" hidden>
+      <div class="setup-section">
+        <div class="setup-label">あなたの色</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-choice="color" data-value="1">
+            <span class="choice-piece piece-black"></span>黒
+          </button>
+          <button class="choice-btn" data-choice="color" data-value="2">
+            <span class="choice-piece piece-white"></span>白
+          </button>
+        </div>
+        <div class="setup-label">手番</div>
+        <div class="choice-row">
+          <button class="choice-btn" data-choice="turn" data-value="first">先攻</button>
+          <button class="choice-btn" data-choice="turn" data-value="second">後攻</button>
+        </div>
+        <button class="start-btn" id="startBtn" disabled>試合開始</button>
+        <div class="partner-choice-hint" id="partnerHint"></div>
+      </div>
+    </div>
 
     <div class="err" id="errLine" hidden></div>
     <div class="footer-link">
@@ -470,16 +547,10 @@ function setError(msg) {
   else { el.textContent = ''; el.hidden = true; }
 }
 function setWsState(state, label) {
-  const dot = $('wsDot');
-  const lbl = $('wsLabel');
-  dot.className = 'ws-dot ' + state;
-  lbl.textContent = label;
+  $('wsDot').className = 'ws-dot ' + state;
+  $('wsLabel').textContent = label;
 }
 
-// ============================================================
-// TOPIC (ntfy.sh のトピック名)
-// URLに紐づく一意な名前を生成
-// ============================================================
 function normalize(s) {
   return (s || '').toLowerCase()
     .replace(/[^a-z0-9]/g, '-')
@@ -487,22 +558,9 @@ function normalize(s) {
     .replace(/^-|-$/g, '');
 }
 const URL_KEY = normalize((location.host || 'local') + '-' + (location.pathname || '/')).slice(0, 40);
-// ntfyはトピック名がパスワードになるので推測されにくく
 const TOPIC = 'rttymk-yonmoku-v2-' + URL_KEY;
 logMsg(`TOPIC = "${TOPIC}"`);
 
-async function fingerprint(s) {
-  try {
-    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
-    return Array.from(new Uint8Array(buf)).slice(0, 4).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
-  } catch (e) { return s.slice(-8).toUpperCase(); }
-}
-fingerprint(TOPIC).then(fp => {
-  $('roomFingerprint').textContent = fp;
-  logMsg(`合言葉 = ${fp}`);
-});
-
-// 自分のID(ランダム) - 同じマシンで2タブ開いても別人扱い
 const MY_ID = Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
 logMsg(`自分のID = ${MY_ID}`);
 
@@ -521,11 +579,30 @@ let heartbeatTimer = null;
 let lastHeartbeatFromPartner = 0;
 let reconnectTimer = null;
 
-// ============================================================
-// SCREEN
-// ============================================================
-function showWait() { $('waitScreen').hidden = false; $('gameScreen').hidden = true; }
-function showGame() { $('waitScreen').hidden = true;  $('gameScreen').hidden = false; }
+let myChoice = { color: null, turn: null };
+let partnerChoice = { color: null, turn: null };
+let myStartPressed = false;
+let partnerStartPressed = false;
+let matchStarted = false;
+
+function showConnecting() {
+  $('connectingBlock').hidden = false;
+  $('setupBlock').hidden = true;
+}
+function showSetup() {
+  $('connectingBlock').hidden = true;
+  $('setupBlock').hidden = false;
+}
+function showWait() {
+  $('waitScreen').hidden = false;
+  $('gameScreen').hidden = true;
+  $('buildBanner').hidden = false;
+}
+function showGame() {
+  $('waitScreen').hidden = true;
+  $('gameScreen').hidden = false;
+  $('buildBanner').hidden = true;
+}
 
 function startElapsed() {
   stopElapsed();
@@ -541,85 +618,58 @@ function stopElapsed() {
 }
 
 // ============================================================
-// NTFY WEBSOCKET
+// WEBSOCKET
 // ============================================================
 function connectWs() {
   if (mode !== 'online') return;
   clearTimeout(reconnectTimer);
-
   const wsUrl = `wss://ntfy.sh/${TOPIC}/ws`;
-  logMsg(`WebSocket 接続試行: ${wsUrl}`);
+  logMsg(`WS接続試行`);
   setWsState('', '接続中…');
-
-  try {
-    ws = new WebSocket(wsUrl);
-  } catch (e) {
-    logMsg('WebSocket 作成失敗: ' + e);
-    scheduleReconnect();
-    return;
-  }
-
+  try { ws = new WebSocket(wsUrl); }
+  catch (e) { logMsg('WS作成失敗: ' + e); scheduleReconnect(); return; }
   ws.onopen = () => {
-    logMsg('✓ WebSocket 接続成功');
+    logMsg('✓ WS接続成功');
     wsBackoff = 1000;
     setWsState('up', 'ntfy.sh に接続中');
     setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
-    // HELLO 送信 (既存のピアに自分の存在を知らせる)
     sendRaw({type: 'hello', from: MY_ID});
     startHeartbeat();
   };
-
   ws.onmessage = (event) => {
     try {
       const obj = JSON.parse(event.data);
-      // ntfy は最初に {event: "open"} を送ってくる
-      if (obj.event === 'open') {
-        logMsg('ntfyサブスクリプション開始');
-        return;
-      }
+      if (obj.event === 'open') return;
       if (obj.event === 'keepalive') return;
       if (obj.event === 'message' && obj.message) {
         let msg;
-        try { msg = JSON.parse(obj.message); }
-        catch (e) { return; }
+        try { msg = JSON.parse(obj.message); } catch (e) { return; }
         handleMessage(msg);
       }
-    } catch (e) {
-      logMsg('受信エラー: ' + e);
-    }
+    } catch (e) { logMsg('受信エラー: ' + e); }
   };
-
-  ws.onerror = (e) => {
-    logMsg('⚠ WebSocket エラー');
-    setWsState('down', 'エラー');
-  };
-
+  ws.onerror = () => { logMsg('⚠ WSエラー'); setWsState('down', 'エラー'); };
   ws.onclose = () => {
-    logMsg('× WebSocket 切断');
+    logMsg('× WS切断');
     setWsState('down', '切断 — 再接続します');
     stopHeartbeat();
     scheduleReconnect();
   };
 }
-
 function scheduleReconnect() {
   if (mode !== 'online') return;
-  logMsg(`${wsBackoff}ms 後に再接続`);
   reconnectTimer = setTimeout(() => {
     wsBackoff = Math.min(wsBackoff * 2, 10000);
     connectWs();
   }, wsBackoff);
 }
-
 function startHeartbeat() {
   stopHeartbeat();
   heartbeatTimer = setInterval(() => {
     sendRaw({type: 'ping', from: MY_ID});
-    // パートナーの生存チェック
     if (partnerId && lastHeartbeatFromPartner > 0) {
-      const silent = Date.now() - lastHeartbeatFromPartner;
-      if (silent > 25000) {
-        logMsg('⚠ 相手から25秒以上応答なし → 切断扱い');
+      if (Date.now() - lastHeartbeatFromPartner > 25000) {
+        logMsg('⚠ 相手から25秒以上応答なし');
         handlePartnerLeave();
       }
     }
@@ -628,13 +678,10 @@ function startHeartbeat() {
 function stopHeartbeat() {
   if (heartbeatTimer) { clearInterval(heartbeatTimer); heartbeatTimer = null; }
 }
-
 function sendRaw(obj) {
-  // ntfy.sh への publish は HTTP POST で行う(WebSocket は読み取り専用)
-  const body = JSON.stringify(obj);
   fetch(`https://ntfy.sh/${TOPIC}`, {
     method: 'POST',
-    body: body,
+    body: JSON.stringify(obj),
     headers: {'Content-Type': 'text/plain'}
   }).catch(e => logMsg('送信失敗: ' + e));
 }
@@ -643,43 +690,42 @@ function sendRaw(obj) {
 // PROTOCOL
 // ============================================================
 function handleMessage(msg) {
-  if (!msg || !msg.from) return;
-  if (msg.from === MY_ID) return; // 自分のメッセージは無視
+  if (!msg || !msg.from || msg.from === MY_ID) return;
 
   if (msg.type === 'hello') {
     logMsg(`← HELLO from ${msg.from.slice(0, 10)}`);
     if (!partnerId) {
-      // 新しいピア発見
       pairWith(msg.from);
-      // 自分も HELLO を返して相手に見つけてもらう
       sendRaw({type: 'hello-ack', from: MY_ID, to: msg.from});
-    } else if (partnerId !== msg.from) {
-      // 既に対戦中なのに別の人が来た → 無視
-      logMsg('⚠ 既に対戦中のため新規ピアを無視');
     }
     return;
   }
   if (msg.type === 'hello-ack') {
     if (msg.to !== MY_ID) return;
-    logMsg(`← HELLO-ACK from ${msg.from.slice(0, 10)}`);
     if (!partnerId) pairWith(msg.from);
     return;
   }
   if (msg.type === 'ping') {
-    if (msg.from === partnerId) {
-      lastHeartbeatFromPartner = Date.now();
-    }
+    if (msg.from === partnerId) lastHeartbeatFromPartner = Date.now();
     return;
   }
 
-  // 以下はペア確立後のみ処理
   if (msg.from !== partnerId) return;
   lastHeartbeatFromPartner = Date.now();
 
-  if (msg.type === 'move') {
+  if (msg.type === 'choice') {
+    partnerChoice.color = msg.color;
+    partnerChoice.turn = msg.turn;
+    updatePartnerHint();
+  } else if (msg.type === 'match-begin') {
+    // 相手が試合開始を確定 → 指定された役割で自分も開始
+    if (!matchStarted) {
+      startMatchWithRoles(msg.yourColor, msg.yourTurn);
+    }
+  } else if (msg.type === 'move') {
     doMove(msg.row, msg.col, true);
   } else if (msg.type === 'reset') {
-    init(); hideModal();
+    resetToSetup();
   } else if (msg.type === 'undo') {
     doUndo(true);
   } else if (msg.type === 'bye') {
@@ -690,56 +736,138 @@ function handleMessage(msg) {
 function pairWith(peerId) {
   partnerId = peerId;
   lastHeartbeatFromPartner = Date.now();
-  myRole = (MY_ID < peerId) ? 1 : 2;
-  logMsg(`✓ ピア確定: ${peerId.slice(0, 10)} / 役割: ${myRole === 1 ? '⚫黒(先手)' : '⚪白(後手)'}`);
+  logMsg(`✓ ピア確定: ${peerId.slice(0, 10)}`);
   onConnected();
 }
 
 function handlePartnerLeave() {
   if (!partnerId) return;
-  logMsg('× 相手が退出');
+  logMsg('× 相手退出');
   partnerId = null;
   myRole = null;
-  updateNetInfo(false);
-  gameOver = true;
-  render();
-  // 新しい相手を待ち始める
+  partnerChoice = { color: null, turn: null };
+  partnerStartPressed = false;
+  myStartPressed = false;
+  matchStarted = false;
+  myChoice = { color: null, turn: null };
+  updateChoiceUI();
+  updatePartnerHint();
+  if ($('gameScreen').hidden === false) {
+    gameOver = true;
+    render();
+  }
   mode = 'online';
   showWait();
+  showConnecting();
   startElapsed();
   setStatus('相手が退出しました。新しい相手を待っています…');
 }
 
 // ============================================================
-// ACTIONS
+// SETUP
 // ============================================================
-function startOnline() {
-  mode = 'online';
-  setError('');
-  setStatus('ntfy.sh に接続中…');
-  startElapsed();
-  connectWs();
-}
-
-function leaveOnline() {
-  if (ws) {
-    try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
-    try { ws.close(); } catch (e) {}
-    ws = null;
-  }
-  stopHeartbeat();
-  stopElapsed();
-  clearTimeout(reconnectTimer);
-  partnerId = null;
-  myRole = null;
-}
-
 function onConnected() {
   stopElapsed();
+  setStatus('');
+  showSetup();
+  updateChoiceUI();
+  updatePartnerHint();
+  toast('接続完了 — 色と手番を選んでください', 2500);
+}
+
+function updateChoiceUI() {
+  document.querySelectorAll('.choice-btn').forEach(btn => {
+    const kind = btn.dataset.choice;
+    const val = btn.dataset.value;
+    const selected = (kind === 'color' && String(myChoice.color) === val)
+                  || (kind === 'turn' && myChoice.turn === val);
+    btn.classList.toggle('selected', selected);
+    btn.disabled = myStartPressed;
+  });
+  const ready = myChoice.color && myChoice.turn;
+  $('startBtn').disabled = !ready;
+  $('startBtn').textContent = '試合開始';
+}
+
+function updatePartnerHint() {
+  const hint = $('partnerHint');
+  if (!partnerId) { hint.textContent = ''; return; }
+  if (partnerChoice.color || partnerChoice.turn) {
+    const pColor = partnerChoice.color === 1 ? '⚫ 黒' : partnerChoice.color === 2 ? '⚪ 白' : '…';
+    const pTurn = partnerChoice.turn === 'first' ? '先攻' : partnerChoice.turn === 'second' ? '後攻' : '…';
+    hint.textContent = `相手の選択: ${pColor} / ${pTurn}`;
+  } else {
+    hint.textContent = '相手も選択中です…';
+  }
+}
+
+function onChoiceClicked(kind, value) {
+  if (matchStarted) return;
+  if (kind === 'color') myChoice.color = Number(value);
+  else if (kind === 'turn') myChoice.turn = value;
+  updateChoiceUI();
+  sendRaw({type: 'choice', from: MY_ID, color: myChoice.color, turn: myChoice.turn});
+}
+
+function onStartClicked() {
+  if (!myChoice.color || !myChoice.turn) return;
+  if (matchStarted) return;
+  // どちらが先に押してもOK。押した人の希望を正として試合開始する
+  logMsg(`「試合開始」を押した(色=${myChoice.color}, 手番=${myChoice.turn})`);
+  startAsInitiator();
+}
+
+function startAsInitiator() {
+  const myColor = myChoice.color;
+  const myTurn = myChoice.turn;
+  const partnerColor = (myColor === 1) ? 2 : 1;
+  const partnerTurn = (myTurn === 'first') ? 'second' : 'first';
+
+  // 相手に「あなたはこの役割で」と通知
+  sendRaw({
+    type: 'match-begin',
+    from: MY_ID,
+    yourColor: partnerColor,
+    yourTurn: partnerTurn
+  });
+
+  startMatchWithRoles(myColor, myTurn);
+}
+
+function startMatchWithRoles(myColor, myTurn) {
+  if (matchStarted) return;
+  matchStarted = true;
+  myRole = myColor;
+
+  const myColorName = myColor === 1 ? '黒' : '白';
+  const myTurnName = myTurn === 'first' ? '先攻' : '後攻';
+  logMsg(`試合開始: あなた=${myColorName}/${myTurnName}`);
+
   init();
+  // 先攻プレイヤーの色を最初の手番にする
+  const firstColor = (myTurn === 'first') ? myColor : (myColor === 1 ? 2 : 1);
+  currentPlayer = firstColor;
+
   updateNetInfo(true);
   showGame();
-  toast(`接続完了 — あなたは ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`, 2500);
+  render();
+  updateStatus();
+  toast(`あなた: ${myColorName} / ${myTurnName}`, 2500);
+}
+
+function resetToSetup() {
+  myChoice = { color: null, turn: null };
+  partnerChoice = { color: null, turn: null };
+  myStartPressed = false;
+  partnerStartPressed = false;
+  matchStarted = false;
+  myRole = null;
+  init();
+  hideModal();
+  showWait();
+  showSetup();
+  updateChoiceUI();
+  updatePartnerHint();
 }
 
 function updateNetInfo(connected) {
@@ -753,7 +881,27 @@ function updateNetInfo(connected) {
     ns.textContent = '⚠️ 相手が切断しました';
     ns.classList.add('disconnected');
   }
-  $('myRoleDisplay').textContent = `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`;
+  $('myRoleDisplay').textContent = myRole
+    ? `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`
+    : '';
+}
+
+function leaveOnline() {
+  if (ws) {
+    try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
+    try { ws.close(); } catch (e) {}
+    ws = null;
+  }
+  stopHeartbeat();
+  stopElapsed();
+  clearTimeout(reconnectTimer);
+  partnerId = null;
+  myRole = null;
+  myChoice = { color: null, turn: null };
+  partnerChoice = { color: null, turn: null };
+  myStartPressed = false;
+  partnerStartPressed = false;
+  matchStarted = false;
 }
 
 function leaveAndReturn() {
@@ -761,7 +909,17 @@ function leaveAndReturn() {
   mode = null;
   $('netInfo').hidden = true;
   showWait();
+  showConnecting();
   startOnline();
+}
+
+function startOnline() {
+  mode = 'online';
+  setError('');
+  setStatus('ntfy.sh に接続中…');
+  showConnecting();
+  startElapsed();
+  connectWs();
 }
 
 function startOffline() {
@@ -771,6 +929,18 @@ function startOffline() {
   init();
   $('netInfo').hidden = true;
   showGame();
+}
+
+function newGameAction() {
+  if (mode === 'online') {
+    sendRaw({type:'reset', from: MY_ID});
+    resetToSetup();
+  } else {
+    init();
+    hideModal();
+    render();
+    updateStatus();
+  }
 }
 
 // ============================================================
@@ -783,15 +953,8 @@ function init() {
   gameOver = false;
   history = [];
   winningLine = null;
-  render();
-  updateStatus();
 }
 
-function newGameAction() {
-  init();
-  hideModal();
-  if (mode === 'online') sendRaw({type:'reset', from: MY_ID});
-}
 function undoAction() { doUndo(false); }
 
 function doUndo(fromNet) {
@@ -975,6 +1138,13 @@ function toast(msg, duration = 1800) {
   }, duration);
 }
 
+// ============================================================
+// WIRE UP
+// ============================================================
+document.querySelectorAll('.choice-btn').forEach(btn => {
+  btn.addEventListener('click', () => onChoiceClicked(btn.dataset.choice, btn.dataset.value));
+});
+$('startBtn').addEventListener('click', onStartClicked);
 $('offlineBtn').addEventListener('click', startOffline);
 $('newGameBtn').addEventListener('click', newGameAction);
 $('undoBtn').addEventListener('click', undoAction);
@@ -988,13 +1158,13 @@ window.addEventListener('beforeunload', () => {
   try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
 });
 
-// 定期 HELLO 再送 (相手が後から来た場合の発見用)
 setInterval(() => {
   if (mode === 'online' && !partnerId && ws && ws.readyState === 1) {
     sendRaw({type: 'hello', from: MY_ID});
   }
 }, 5000);
 
+init();
 startOnline();
 })();
 </script>
