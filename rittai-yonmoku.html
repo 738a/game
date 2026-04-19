@@ -17,7 +17,6 @@
     user-select: none;
   }
   [hidden] { display: none !important; }
-
   html, body {
     overflow-x: hidden;
     overscroll-behavior: none;
@@ -34,7 +33,6 @@
     align-items: center;
     padding: max(10px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
   }
-
   .build-tag {
     position: fixed;
     bottom: 4px;
@@ -45,7 +43,6 @@
     z-index: 1;
   }
 
-  /* ============ Waiting screen ============ */
   .screen {
     width: 100%;
     max-width: 380px;
@@ -59,7 +56,7 @@
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 20px;
-    padding: 32px 22px;
+    padding: 28px 22px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     text-align: center;
@@ -77,12 +74,12 @@
   .subtitle {
     font-size: 13px;
     color: rgba(255,255,255,0.55);
-    margin-bottom: 26px;
+    margin-bottom: 22px;
   }
   .loading-dots {
     display: inline-flex;
     gap: 6px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
   .loading-dots span {
     width: 10px; height: 10px;
@@ -96,22 +93,58 @@
     0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
     40% { transform: scale(1.2); opacity: 1; }
   }
-  .wait-headline {
-    font-size: 18px;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
+  .wait-headline { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
   .elapsed { color: rgba(255,255,255,0.45); font-size: 13px; margin-left: 4px; }
   .status-line {
     font-size: 12px;
     color: rgba(255,255,255,0.55);
-    margin-top: 10px;
+    margin-top: 8px;
     line-height: 1.6;
-    min-height: 32px;
   }
+
+  .room-fingerprint {
+    font-family: 'SF Mono','Menlo','Monaco',monospace;
+    background: rgba(0,0,0,0.3);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 14px;
+    color: #b8c5ff;
+    letter-spacing: 0.05em;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .room-fingerprint-label {
+    font-size: 10px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 14px;
+    margin-bottom: 4px;
+    letter-spacing: 0.1em;
+  }
+
+  .relay-status {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .relay-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    transition: background 0.3s;
+  }
+  .relay-dot.up { background: #6ee7b7; box-shadow: 0 0 4px rgba(110,231,183,0.6); }
+  .relay-dot.down { background: rgba(255,255,255,0.15); }
+  .relay-summary {
+    font-size: 11px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 6px;
+  }
+
   .footer-link {
-    margin-top: 20px;
-    padding-top: 16px;
+    margin-top: 18px;
+    padding-top: 14px;
     border-top: 1px solid rgba(255,255,255,0.08);
   }
   .text-btn {
@@ -150,13 +183,12 @@
     font-size: 10px;
     color: rgba(255,255,255,0.7);
     margin-top: 8px;
-    max-height: 140px;
+    max-height: 200px;
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
     line-height: 1.5;
   }
-
   .err {
     color: #ff8b8b;
     font-size: 13px;
@@ -164,7 +196,7 @@
     line-height: 1.6;
   }
 
-  /* ============ Game screen ============ */
+  /* Game */
   .header { width: 100%; max-width: 480px; text-align: center; padding: 4px 0 8px; }
   .header h1 {
     font-size: 22px;
@@ -202,12 +234,7 @@
     flex-wrap: wrap;
   }
   .net-status.disconnected { color: #ff8b8b; }
-  .turn-indicator {
-    width: 22px; height: 22px;
-    border-radius: 50%;
-    transition: all 0.3s;
-    flex-shrink: 0;
-  }
+  .turn-indicator { width: 22px; height: 22px; border-radius: 50%; transition: all 0.3s; flex-shrink: 0; }
   .piece-black {
     background: radial-gradient(circle at 32% 28%, #6b6b8e 0%, #2a2a3e 50%, #0a0a14 100%);
     box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.5);
@@ -216,13 +243,7 @@
     background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e8e8f0 50%, #b8b8c8 100%);
     box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 -2px 4px rgba(0,0,0,0.15);
   }
-  .boards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    width: 100%;
-    max-width: 440px;
-  }
+  .boards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; max-width: 440px; }
   @media (min-width: 760px) {
     .boards { grid-template-columns: repeat(4, 1fr); max-width: 820px; gap: 12px; }
   }
@@ -242,12 +263,7 @@
     font-weight: 700;
     letter-spacing: 0.08em;
   }
-  .board {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 4px;
-    aspect-ratio: 1;
-  }
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; aspect-ratio: 1; }
   .cell {
     background: rgba(255,255,255,0.06);
     border-radius: 6px;
@@ -258,10 +274,7 @@
     transition: background 0.15s, transform 0.1s;
   }
   .cell.tappable { cursor: pointer; }
-  .cell.tappable:active {
-    background: rgba(255,255,255,0.18);
-    transform: scale(0.92);
-  }
+  .cell.tappable:active { background: rgba(255,255,255,0.18); transform: scale(0.92); }
   .cell .piece { width: 80%; height: 80%; border-radius: 50%; }
   .cell .piece.fresh { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
   @keyframes pop {
@@ -314,10 +327,7 @@
     font-family: inherit;
   }
   button:active { transform: scale(0.96); background: rgba(255,255,255,0.18); }
-  button.primary {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-color: transparent;
-  }
+  button.primary { background: linear-gradient(135deg, #667eea, #764ba2); border-color: transparent; }
   .info {
     font-size: 11px;
     color: rgba(255,255,255,0.42);
@@ -328,7 +338,6 @@
     padding: 0 8px;
   }
 
-  /* ============ Modal ============ */
   .modal {
     position: fixed;
     inset: 0;
@@ -381,17 +390,13 @@
     text-align: center;
     max-width: 320px;
   }
-  .toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
 
-<div class="build-tag">build 2026-04-19c</div>
+<div class="build-tag">build 2026-04-19d (torrent)</div>
 
-<!-- ====== Waiting screen ====== -->
 <div id="waitScreen" class="screen">
   <div class="card">
     <div class="brand">立体四目</div>
@@ -401,18 +406,24 @@
       対戦相手を待っています<span class="elapsed" id="elapsed"></span>
     </div>
     <div class="status-line" id="statusLine">通信を準備中…</div>
+
+    <div class="relay-status" id="relayDots"></div>
+    <div class="relay-summary" id="relaySummary"></div>
+
+    <div class="room-fingerprint-label">この対戦の合言葉（両端末で一致してることを確認）</div>
+    <div class="room-fingerprint" id="roomFingerprint">--------</div>
+
     <div class="err" id="errLine" hidden></div>
     <div class="footer-link">
       <button class="text-btn" id="offlineBtn">同じ端末で2人で遊ぶ</button>
     </div>
     <details class="diag">
-      <summary>うまく繋がらないとき（接続ログ）</summary>
+      <summary>うまく繋がらないとき(接続ログ)</summary>
       <div class="log" id="log"></div>
     </details>
   </div>
 </div>
 
-<!-- ====== Game screen ====== -->
 <div id="gameScreen" hidden style="width:100%;display:flex;flex-direction:column;align-items:center;">
   <div class="header"><h1>立体四目</h1></div>
   <div class="status">
@@ -435,7 +446,6 @@
   </div>
 </div>
 
-<!-- ====== Modal ====== -->
 <div class="modal" id="modal">
   <div class="modal-content">
     <div class="winner-piece" id="winnerPiece"></div>
@@ -448,9 +458,6 @@
 </div>
 
 <script type="module">
-// ============================================================
-// IMPORT (Trystero 0.23.0, nostr strategy)
-// ============================================================
 const $ = id => document.getElementById(id);
 
 function log(msg) {
@@ -467,12 +474,16 @@ function setError(msg) {
   else { el.textContent = ''; el.hidden = true; }
 }
 
-let joinRoom, selfId;
+// ============================================================
+// IMPORT - Trystero with TORRENT strategy (most stable for public use)
+// ============================================================
+let joinRoom, selfId, getRelaySockets;
 try {
   setStatus('ライブラリを読み込み中…');
-  const mod = await import('https://esm.run/trystero@0.23.0/nostr');
+  const mod = await import('https://esm.run/trystero@0.23.0/torrent');
   joinRoom = mod.joinRoom;
   selfId = mod.selfId;
+  getRelaySockets = mod.getRelaySockets;
   log(`ライブラリ読み込み成功 (selfId: ${selfId.slice(0, 12)}…)`);
 } catch (e) {
   log('❌ ライブラリ読込失敗: ' + (e && e.message || e));
@@ -484,17 +495,43 @@ try {
 // STATE
 // ============================================================
 let board, currentPlayer, gameOver, history, winningLine;
-let mode = null;          // 'online' | 'offline' | null
-let myRole = null;        // 1 (black) | 2 (white) | null
+let mode = null;
+let myRole = null;
 let room = null;
 let actions = {};
 let partnerPeerId = null;
 let elapsedTimer = null;
+let relayMonitor = null;
 let elapsedSec = 0;
 
-// このアプリ専用のID（ホストするURLごとに固有のルームになる）
-const APP_ID = 'rttymk-yonmoku-2026-04-' + (location.host || 'local') + (location.pathname || '/');
+// ============================================================
+// APP_ID & ROOM_NAME (両端末で確実に一致するように厳格に正規化)
+// ============================================================
+function normalize(s) {
+  return (s || '').toLowerCase()
+    .replace(/[^a-z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+// この HTML が置かれている origin + pathname が一致する人同士がマッチング
+const URL_KEY = normalize((location.host || 'local') + '_' + (location.pathname || '/'))
+                  .slice(0, 40);
+const APP_ID = 'rttymk-yonmoku-' + URL_KEY;
 const ROOM_NAME = 'main';
+log(`APP_ID = "${APP_ID}"`);
+log(`ROOM   = "${ROOM_NAME}"`);
+
+// 両端末で目視確認できるよう短いハッシュを表示
+async function fingerprint(s) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(buf)).slice(0, 4).map(b => b.toString(16).padStart(2,'0')).join('').toUpperCase();
+  } catch (e) { return s.slice(-8).toUpperCase(); }
+}
+fingerprint(APP_ID + '/' + ROOM_NAME).then(fp => {
+  $('roomFingerprint').textContent = fp;
+  log(`合言葉 fingerprint = ${fp}`);
+});
 
 // ============================================================
 // SCREEN
@@ -508,11 +545,49 @@ function startElapsed() {
   elapsedTimer = setInterval(() => {
     elapsedSec++;
     $('elapsed').textContent = ` (${elapsedSec}秒)`;
+    if (elapsedSec === 15) {
+      log('⏱ 15秒経過 — まだピア未発見');
+      setStatus('まだ繋がりません。相手も同じURLを開いていますか？');
+    }
+    if (elapsedSec === 45) {
+      log('⏱ 45秒経過 — リレーをチェック');
+      setStatus('時間がかかっています。下の「合言葉」が両端末で一致しているか確認してください。');
+    }
   }, 1000);
 }
 function stopElapsed() {
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
   $('elapsed').textContent = '';
+}
+
+function startRelayMonitor() {
+  stopRelayMonitor();
+  const update = () => {
+    if (!getRelaySockets) return;
+    let sockets;
+    try { sockets = getRelaySockets() || {}; } catch (e) { return; }
+    const urls = Object.keys(sockets);
+    const dots = $('relayDots');
+    dots.innerHTML = '';
+    let upCount = 0;
+    urls.forEach(url => {
+      const ws = sockets[url];
+      const isOpen = ws && ws.readyState === 1; // WebSocket.OPEN
+      if (isOpen) upCount++;
+      const dot = document.createElement('div');
+      dot.className = 'relay-dot ' + (isOpen ? 'up' : 'down');
+      dot.title = url + (isOpen ? ' (接続中)' : ' (未接続)');
+      dots.appendChild(dot);
+    });
+    $('relaySummary').textContent = urls.length === 0
+      ? 'リレー接続を初期化中…'
+      : `中継サーバー ${upCount}/${urls.length} に接続中`;
+  };
+  update();
+  relayMonitor = setInterval(update, 1000);
+}
+function stopRelayMonitor() {
+  if (relayMonitor) { clearInterval(relayMonitor); relayMonitor = null; }
 }
 
 // ============================================================
@@ -522,13 +597,14 @@ function startOnline() {
   if (!joinRoom) return;
   mode = 'online';
   setError('');
-  setStatus('シグナリング中継サーバーに接続中…');
+  setStatus('Trystero(Torrent方式)に接続中…');
   startElapsed();
+  startRelayMonitor();
 
   try {
-    log(`joinRoom() 開始 — appId="${APP_ID}", room="${ROOM_NAME}"`);
-    room = joinRoom({ appId: APP_ID }, ROOM_NAME);
-    log('joinRoom() OK — ピア発見待機');
+    log('joinRoom() 開始');
+    room = joinRoom({ appId: APP_ID, relayRedundancy: 4 }, ROOM_NAME);
+    log('joinRoom() OK');
     setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
   } catch (e) {
     log('❌ joinRoom 失敗: ' + (e && e.message || e));
@@ -560,14 +636,12 @@ function startOnline() {
   room.onPeerJoin(peerId => {
     log(`✓ ピア発見: ${peerId.slice(0, 12)}…`);
     if (partnerPeerId !== null) {
-      // すでに2人いるところに3人目が入ってきた
       log('⚠ 既に対戦中のため新規ピアを無視');
       return;
     }
     partnerPeerId = peerId;
-    // 役割は selfId と peerId の比較で決定論的に決める
     myRole = (selfId < peerId) ? 1 : 2;
-    log(`役割決定: あなたは ${myRole === 1 ? '⚫ 黒（先手）' : '⚪ 白（後手）'}`);
+    log(`役割決定: あなた=${myRole === 1 ? '⚫黒(先手)' : '⚪白(後手)'}`);
     onConnected();
   });
 
@@ -583,6 +657,7 @@ function startOnline() {
 
 async function leaveOnline() {
   stopElapsed();
+  stopRelayMonitor();
   if (room) {
     try { await room.leave(); } catch (e) {}
     room = null;
@@ -618,8 +693,6 @@ function onDisconnected() {
   updateNetInfo(false);
   gameOver = true;
   render();
-  // 待機画面にも戻れるように
-  setStatus('相手が切断しました。退室するか、相手の再接続を待ってください。');
 }
 
 function updateNetInfo(connected) {
@@ -644,7 +717,6 @@ async function leaveAndReturn() {
   mode = null;
   $('netInfo').hidden = true;
   showWait();
-  // すぐ再接続
   startOnline();
 }
 
@@ -676,15 +748,11 @@ function newGameAction() {
   hideModal();
   if (mode === 'online') send({type:'reset'});
 }
-
 function undoAction() { doUndo(false); }
 
 function doUndo(fromNet) {
   if (history.length === 0) return;
-  if (gameOver) {
-    gameOver = false;
-    winningLine = null;
-  }
+  if (gameOver) { gameOver = false; winningLine = null; }
   const last = history.pop();
   board[last.l][last.r][last.c] = 0;
   currentPlayer = currentPlayer === 1 ? 2 : 1;
@@ -771,9 +839,6 @@ function getDropLayer(row, col) {
   return -1;
 }
 
-// ============================================================
-// RENDER
-// ============================================================
 function render() {
   const container = $('boards');
   container.innerHTML = '';
@@ -866,9 +931,6 @@ function toast(msg, duration = 1800) {
   }, duration);
 }
 
-// ============================================================
-// WIRE UP
-// ============================================================
 $('offlineBtn').addEventListener('click', startOffline);
 $('newGameBtn').addEventListener('click', newGameAction);
 $('undoBtn').addEventListener('click', undoAction);
@@ -880,10 +942,7 @@ $('modal').addEventListener('click', (e) => {
 });
 window.addEventListener('beforeunload', () => { if (room) try { room.leave(); } catch(e) {} });
 
-// 自動でオンライン待機を開始
-if (joinRoom) {
-  startOnline();
-}
+if (joinRoom) startOnline();
 </script>
 </body>
 </html>
