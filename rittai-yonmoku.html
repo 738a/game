@@ -295,7 +295,46 @@
     font-weight: 700;
     letter-spacing: 0.08em;
   }
-  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; aspect-ratio: 1; }
+  .board-label .axis-z {
+    color: #ffd86b;
+  }
+  /* 盤を 行見出し(y軸) + 4x4 グリッド に分けて配置 */
+  .board-grid {
+    display: grid;
+    grid-template-columns: 14px 1fr;
+    grid-template-rows: 14px 1fr;
+    gap: 2px;
+    aspect-ratio: 1;
+  }
+  .axis-corner { }
+  .axis-top, .axis-left {
+    display: grid;
+    gap: 4px;
+    color: rgba(255,255,255,0.5);
+    font-size: 9px;
+    font-weight: 700;
+    font-family: 'SF Mono','Menlo','Monaco',monospace;
+  }
+  .axis-top {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .axis-top span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .axis-top span:first-child { color: #ff8fa3; }  /* x軸の色 */
+  .axis-top span { color: #ff8fa3; }
+  .axis-left {
+    grid-template-rows: repeat(4, 1fr);
+  }
+  .axis-left span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7dd3fc;  /* y軸の色 */
+  }
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .cell {
     background: rgba(255,255,255,0.06);
     border-radius: 6px;
@@ -484,7 +523,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19h — 3D view</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19i — 3D view + axes</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -553,7 +592,7 @@
       <button class="view3d-reset" id="view3dReset">視点リセット</button>
     </div>
     <canvas id="view3dCanvas"></canvas>
-    <div class="view3d-hint">ドラッグで回転・ピンチでズーム</div>
+    <div class="view3d-hint">ドラッグで回転・ピンチでズーム ／ <span style="color:#ff8fa3">x</span>・<span style="color:#7dd3fc">y</span>・<span style="color:#ffd86b">z</span> 軸</div>
   </div>
 
   <div class="controls">
@@ -1121,8 +1160,38 @@ function render() {
     wrap.className = 'board-container';
     const label = document.createElement('div');
     label.className = 'board-label';
-    label.textContent = `${l+1}階` + (l === 0 ? ' (一番下)' : l === 3 ? ' (一番上)' : '');
+    label.innerHTML = `<span class="axis-z">z=${l}</span> <span style="color:rgba(255,255,255,0.4);">(${l+1}階${l === 0 ? '・一番下' : l === 3 ? '・一番上' : ''})</span>`;
     wrap.appendChild(label);
+
+    // 座標軸付きレイアウト
+    const boardGrid = document.createElement('div');
+    boardGrid.className = 'board-grid';
+
+    // 左上の空きセル
+    const corner = document.createElement('div');
+    corner.className = 'axis-corner';
+    boardGrid.appendChild(corner);
+
+    // 上: x軸ラベル (0,1,2,3)
+    const axisTop = document.createElement('div');
+    axisTop.className = 'axis-top';
+    for (let x = 0; x < 4; x++) {
+      const s = document.createElement('span');
+      s.textContent = x;
+      axisTop.appendChild(s);
+    }
+    boardGrid.appendChild(axisTop);
+
+    // 左: y軸ラベル (0,1,2,3)
+    const axisLeft = document.createElement('div');
+    axisLeft.className = 'axis-left';
+    for (let y = 0; y < 4; y++) {
+      const s = document.createElement('span');
+      s.textContent = y;
+      axisLeft.appendChild(s);
+    }
+    boardGrid.appendChild(axisLeft);
+
     const grid = document.createElement('div');
     grid.className = 'board';
     for (let r = 0; r < 4; r++) {
@@ -1149,7 +1218,8 @@ function render() {
         grid.appendChild(cell);
       }
     }
-    wrap.appendChild(grid);
+    boardGrid.appendChild(grid);
+    wrap.appendChild(boardGrid);
     container.appendChild(wrap);
   }
   update3D();
@@ -1328,6 +1398,115 @@ function buildLattice() {
       threeCubeGroup.add(new THREE.LineSegments(geo, mat));
     }
   }
+
+  // 座標軸＋目盛ラベル
+  buildAxes();
+}
+
+// テキストをcanvasに描いてSpriteとして返す
+function makeTextSprite(text, color, size) {
+  size = size || 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.font = `bold ${size}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = color;
+  ctx.fillText(text, 64, 64);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.renderOrder = 999;
+  return sprite;
+}
+
+function buildAxes() {
+  const cellSize = 1.4;
+  const offset = (cellSize * 3) / 2;
+  const cellHalf = cellSize / 2;
+
+  // 軸の色: x=ピンク, y=水色, z=黄色 (盤の色と一致)
+  const xColor = '#ff8fa3';
+  const yColor = '#7dd3fc';
+  const zColor = '#ffd86b';
+
+  // 軸の矢印 (3D の内部座標: x→X軸, z→Y軸, y→Z軸 になっている)
+  // こちらの盤座標定義:
+  //   cell(c, r, l) => position (c*cs - offset, l*cs - offset, r*cs - offset)
+  //   つまり x = c (横方向), y(3D) = l (高さ), z(3D) = r (奥行き)
+  // 盤の論理軸 (x, y, z) = (c, r, l) とする
+  //   論理x (c) → 3D の X 軸
+  //   論理y (r) → 3D の Z 軸
+  //   論理z (l) → 3D の Y 軸
+
+  const axisOrigin = -offset - cellHalf - 0.3;
+  const axisEnd = offset + cellHalf + 0.6;
+
+  // x軸 (論理x, 3DのX方向)
+  addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisEnd, axisOrigin, axisOrigin], 0xff8fa3);
+  for (let i = 0; i < 4; i++) {
+    const sp = makeTextSprite(String(i), xColor, 72);
+    sp.position.set(i * cellSize - offset, axisOrigin - 0.5, axisOrigin - 0.3);
+    sp.scale.set(0.6, 0.6, 1);
+    threeCubeGroup.add(sp);
+  }
+  const xLabel = makeTextSprite('x', xColor, 96);
+  xLabel.position.set(axisEnd + 0.3, axisOrigin - 0.4, axisOrigin - 0.3);
+  xLabel.scale.set(0.8, 0.8, 1);
+  threeCubeGroup.add(xLabel);
+
+  // y軸 (論理y, 3DのZ方向)
+  addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisOrigin, axisOrigin, axisEnd], 0x7dd3fc);
+  for (let i = 0; i < 4; i++) {
+    const sp = makeTextSprite(String(i), yColor, 72);
+    sp.position.set(axisOrigin - 0.3, axisOrigin - 0.5, i * cellSize - offset);
+    sp.scale.set(0.6, 0.6, 1);
+    threeCubeGroup.add(sp);
+  }
+  const yLabel = makeTextSprite('y', yColor, 96);
+  yLabel.position.set(axisOrigin - 0.3, axisOrigin - 0.4, axisEnd + 0.3);
+  yLabel.scale.set(0.8, 0.8, 1);
+  threeCubeGroup.add(yLabel);
+
+  // z軸 (論理z, 3DのY方向=高さ)
+  addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisOrigin, axisEnd, axisOrigin], 0xffd86b);
+  for (let i = 0; i < 4; i++) {
+    const sp = makeTextSprite(String(i), zColor, 72);
+    sp.position.set(axisOrigin - 0.5, i * cellSize - offset, axisOrigin - 0.3);
+    sp.scale.set(0.6, 0.6, 1);
+    threeCubeGroup.add(sp);
+  }
+  const zLabel = makeTextSprite('z', zColor, 96);
+  zLabel.position.set(axisOrigin - 0.5, axisEnd + 0.3, axisOrigin - 0.3);
+  zLabel.scale.set(0.8, 0.8, 1);
+  threeCubeGroup.add(zLabel);
+}
+
+function addAxisLine(from, to, color) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute([
+    from[0], from[1], from[2],
+    to[0], to[1], to[2]
+  ], 3));
+  const mat = new THREE.LineBasicMaterial({ color: color, transparent: true, opacity: 0.8 });
+  threeCubeGroup.add(new THREE.LineSegments(geo, mat));
+  // 矢印の先端 (小さな円錐)
+  const dir = new THREE.Vector3(to[0]-from[0], to[1]-from[1], to[2]-from[2]);
+  const len = dir.length();
+  const coneGeo = new THREE.ConeGeometry(0.1, 0.25, 8);
+  const coneMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.9 });
+  const cone = new THREE.Mesh(coneGeo, coneMat);
+  cone.position.set(to[0], to[1], to[2]);
+  // 円錐は +Y 向きなので回転させる
+  const up = new THREE.Vector3(0, 1, 0);
+  const target = dir.clone().normalize();
+  const quat = new THREE.Quaternion().setFromUnitVectors(up, target);
+  cone.quaternion.copy(quat);
+  threeCubeGroup.add(cone);
 }
 
 function update3D() {
