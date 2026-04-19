@@ -271,7 +271,11 @@
   .turn-indicator { width: 22px; height: 22px; border-radius: 50%; transition: all 0.3s; flex-shrink: 0; }
   .piece-black {
     background: radial-gradient(circle at 32% 28%, #6b6b8e 0%, #2a2a3e 50%, #0a0a14 100%);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.4), inset 0 -2px 4px rgba(0,0,0,0.5);
+    box-shadow:
+      0 2px 4px rgba(0,0,0,0.4),
+      inset 0 -2px 4px rgba(0,0,0,0.5),
+      0 0 0 2px rgba(180, 200, 255, 0.55),
+      0 0 10px rgba(130, 160, 230, 0.4);
   }
   .piece-white {
     background: radial-gradient(circle at 32% 28%, #ffffff 0%, #e8e8f0 50%, #b8b8c8 100%);
@@ -336,7 +340,7 @@
   }
   .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .cell {
-    background: rgba(255,255,255,0.06);
+    background: rgba(10, 8, 30, 0.45);
     border-radius: 6px;
     display: flex;
     align-items: center;
@@ -523,7 +527,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19j — MQTT</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19k — MQTT + 1-indexed</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -1224,7 +1228,7 @@ function render() {
     wrap.className = 'board-container';
     const label = document.createElement('div');
     label.className = 'board-label';
-    label.innerHTML = `<span class="axis-z">z=${l}</span> <span style="color:rgba(255,255,255,0.4);">(${l+1}階${l === 0 ? '・一番下' : l === 3 ? '・一番上' : ''})</span>`;
+    label.innerHTML = `<span class="axis-z">z=${l+1}</span> <span style="color:rgba(255,255,255,0.4);">(${l+1}階${l === 0 ? '・一番下' : l === 3 ? '・一番上' : ''})</span>`;
     wrap.appendChild(label);
 
     // 座標軸付きレイアウト
@@ -1241,17 +1245,17 @@ function render() {
     axisTop.className = 'axis-top';
     for (let x = 0; x < 4; x++) {
       const s = document.createElement('span');
-      s.textContent = x;
+      s.textContent = x + 1;
       axisTop.appendChild(s);
     }
     boardGrid.appendChild(axisTop);
 
-    // 左: y軸ラベル (0,1,2,3)
+    // 左: y軸ラベル (1,2,3,4)
     const axisLeft = document.createElement('div');
     axisLeft.className = 'axis-left';
     for (let y = 0; y < 4; y++) {
       const s = document.createElement('span');
-      s.textContent = y;
+      s.textContent = y + 1;
       axisLeft.appendChild(s);
     }
     boardGrid.appendChild(axisLeft);
@@ -1513,7 +1517,7 @@ function buildAxes() {
   // x軸 (論理x, 3DのX方向)
   addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisEnd, axisOrigin, axisOrigin], 0xff8fa3);
   for (let i = 0; i < 4; i++) {
-    const sp = makeTextSprite(String(i), xColor, 72);
+    const sp = makeTextSprite(String(i + 1), xColor, 72);
     sp.position.set(i * cellSize - offset, axisOrigin - 0.5, axisOrigin - 0.3);
     sp.scale.set(0.6, 0.6, 1);
     threeCubeGroup.add(sp);
@@ -1526,7 +1530,7 @@ function buildAxes() {
   // y軸 (論理y, 3DのZ方向)
   addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisOrigin, axisOrigin, axisEnd], 0x7dd3fc);
   for (let i = 0; i < 4; i++) {
-    const sp = makeTextSprite(String(i), yColor, 72);
+    const sp = makeTextSprite(String(i + 1), yColor, 72);
     sp.position.set(axisOrigin - 0.3, axisOrigin - 0.5, i * cellSize - offset);
     sp.scale.set(0.6, 0.6, 1);
     threeCubeGroup.add(sp);
@@ -1539,7 +1543,7 @@ function buildAxes() {
   // z軸 (論理z, 3DのY方向=高さ)
   addAxisLine([axisOrigin, axisOrigin, axisOrigin], [axisOrigin, axisEnd, axisOrigin], 0xffd86b);
   for (let i = 0; i < 4; i++) {
-    const sp = makeTextSprite(String(i), zColor, 72);
+    const sp = makeTextSprite(String(i + 1), zColor, 72);
     sp.position.set(axisOrigin - 0.5, i * cellSize - offset, axisOrigin - 0.3);
     sp.scale.set(0.6, 0.6, 1);
     threeCubeGroup.add(sp);
@@ -1597,6 +1601,7 @@ function update3D() {
 
   // 駒
   const sphereGeo = new THREE.SphereGeometry(0.45, 24, 18);
+  const haloGeo = new THREE.SphereGeometry(0.52, 20, 14);
   for (let l = 0; l < 4; l++) {
     for (let r = 0; r < 4; r++) {
       for (let c = 0; c < 4; c++) {
@@ -1604,16 +1609,31 @@ function update3D() {
         if (v === 0) continue;
         const isWinning = winningLine && winningLine.some(p => p.l===l && p.r===r && p.c===c);
         const isLast = lastMove && lastMove.l === l && lastMove.r === r && lastMove.c === c;
+        const pos = new THREE.Vector3(
+          c * cellSize - offset,
+          l * cellSize - offset,
+          r * cellSize - offset
+        );
         let mat;
         if (v === 1) {
-          // 黒
+          // 黒 — 少し明るめ & 光沢強化
           mat = new THREE.MeshPhongMaterial({
-            color: 0x1a1a2e,
-            emissive: isWinning ? 0xffc940 : (isLast ? 0x667eea : 0x000000),
-            emissiveIntensity: isWinning ? 0.5 : (isLast ? 0.35 : 0),
-            shininess: 60,
-            specular: 0x555577
+            color: 0x2a2e44,
+            emissive: isWinning ? 0xffc940 : (isLast ? 0x667eea : 0x1a2244),
+            emissiveIntensity: isWinning ? 0.5 : (isLast ? 0.45 : 0.25),
+            shininess: 90,
+            specular: 0xaabbff
           });
+          // 外周に半透明の水色ハローを追加して紫背景から浮き立たせる
+          const haloMat = new THREE.MeshBasicMaterial({
+            color: 0x99b8ff,
+            transparent: true,
+            opacity: 0.18,
+            depthWrite: false
+          });
+          const halo = new THREE.Mesh(haloGeo.clone(), haloMat);
+          halo.position.copy(pos);
+          threePiecesGroup.add(halo);
         } else {
           // 白
           mat = new THREE.MeshPhongMaterial({
@@ -1625,11 +1645,7 @@ function update3D() {
           });
         }
         const mesh = new THREE.Mesh(sphereGeo.clone(), mat);
-        mesh.position.set(
-          c * cellSize - offset,
-          l * cellSize - offset,
-          r * cellSize - offset
-        );
+        mesh.position.copy(pos);
         threePiecesGroup.add(mesh);
       }
     }
