@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0f0c29">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>立体四目</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -13,7 +16,6 @@
     -webkit-touch-callout: none;
     user-select: none;
   }
-  /* HTML hidden 属性は何があっても効くように */
   [hidden] { display: none !important; }
 
   html, body {
@@ -33,7 +35,17 @@
     padding: max(10px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
   }
 
-  /* ======== Connect / Waiting screens ======== */
+  .build-tag {
+    position: fixed;
+    bottom: 4px;
+    right: 6px;
+    font-size: 9px;
+    color: rgba(255,255,255,0.25);
+    font-family: monospace;
+    z-index: 1;
+  }
+
+  /* ============ Waiting screen ============ */
   .screen {
     width: 100%;
     max-width: 380px;
@@ -47,71 +59,59 @@
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 20px;
-    padding: 28px 22px;
+    padding: 32px 22px;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     text-align: center;
   }
   .brand {
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 700;
     letter-spacing: 0.18em;
     background: linear-gradient(90deg, #fff, #b8c5ff);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
   .subtitle {
     font-size: 13px;
     color: rgba(255,255,255,0.55);
-    margin-bottom: 22px;
+    margin-bottom: 26px;
   }
-  .or-divider {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 18px 0;
-    color: rgba(255,255,255,0.35);
-    font-size: 12px;
+  .loading-dots {
+    display: inline-flex;
+    gap: 6px;
+    margin-bottom: 16px;
   }
-  .or-divider::before, .or-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: rgba(255,255,255,0.12);
+  .loading-dots span {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.7);
+    animation: bounce 1.2s infinite ease-in-out;
   }
-  .join-row { display: flex; gap: 8px; }
-  .join-row input {
-    flex: 1;
-    padding: 12px 14px;
-    background: rgba(0,0,0,0.25);
-    border: 1px solid rgba(255,255,255,0.18);
-    color: #fff;
-    border-radius: 12px;
+  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
+    40% { transform: scale(1.2); opacity: 1; }
+  }
+  .wait-headline {
     font-size: 18px;
-    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-    letter-spacing: 0.15em;
-    text-align: center;
-    min-width: 0;
-    outline: none;
+    font-weight: 600;
+    margin-bottom: 6px;
   }
-  .join-row input:focus { border-color: rgba(118,75,162,0.8); }
-  .join-row input::placeholder {
-    color: rgba(255,255,255,0.3);
-    letter-spacing: 0;
-    font-family: inherit;
-  }
-  .error-text {
-    color: #ff8b8b;
+  .elapsed { color: rgba(255,255,255,0.45); font-size: 13px; margin-left: 4px; }
+  .status-line {
     font-size: 12px;
-    margin-top: 12px;
-    min-height: 16px;
-    line-height: 1.5;
+    color: rgba(255,255,255,0.55);
+    margin-top: 10px;
+    line-height: 1.6;
+    min-height: 32px;
   }
   .footer-link {
-    margin-top: 18px;
-    padding-top: 14px;
+    margin-top: 20px;
+    padding-top: 16px;
     border-top: 1px solid rgba(255,255,255,0.08);
   }
   .text-btn {
@@ -128,50 +128,43 @@
     font-family: inherit;
   }
   .text-btn:active { color: rgba(255,255,255,0.85); }
-  .room-code-display {
-    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
-    font-size: 32px;
-    font-weight: 700;
-    letter-spacing: 0.25em;
-    background: rgba(255,255,255,0.1);
-    padding: 16px 8px 16px 32px;
-    border-radius: 12px;
-    margin: 16px 0 8px;
-    color: #fff;
-    border: 1px solid rgba(255,255,255,0.15);
-  }
-  .button-row {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-  .button-row button { flex: 1; }
-  .loading-dots {
-    display: inline-flex;
-    gap: 6px;
-    margin-bottom: 14px;
-  }
-  .loading-dots span {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.7);
-    animation: bounce 1.2s infinite ease-in-out;
-  }
-  .loading-dots span:nth-child(2) { animation-delay: 0.15s; }
-  .loading-dots span:nth-child(3) { animation-delay: 0.3s; }
-  @keyframes bounce {
-    0%, 80%, 100% { transform: scale(0.5); opacity: 0.4; }
-    40% { transform: scale(1.2); opacity: 1; }
-  }
-  .elapsed { color: rgba(255,255,255,0.45); font-size: 12px; margin-left: 4px; }
-  .help-text {
+
+  details.diag {
+    margin-top: 14px;
+    text-align: left;
+    background: rgba(0,0,0,0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
     font-size: 11px;
-    color: rgba(255,255,255,0.45);
+  }
+  details.diag summary {
+    cursor: pointer;
+    color: rgba(255,255,255,0.5);
+    font-weight: 600;
+    list-style: none;
+  }
+  details.diag summary::after { content: ' ▸'; }
+  details.diag[open] summary::after { content: ' ▾'; }
+  .log {
+    font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+    font-size: 10px;
+    color: rgba(255,255,255,0.7);
+    margin-top: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.5;
+  }
+
+  .err {
+    color: #ff8b8b;
+    font-size: 13px;
     margin-top: 14px;
     line-height: 1.6;
   }
 
-  /* ======== Game screen ======== */
+  /* ============ Game screen ============ */
   .header { width: 100%; max-width: 480px; text-align: center; padding: 4px 0 8px; }
   .header h1 {
     font-size: 22px;
@@ -270,9 +263,7 @@
     transform: scale(0.92);
   }
   .cell .piece { width: 80%; height: 80%; border-radius: 50%; }
-  .cell .piece.fresh {
-    animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
+  .cell .piece.fresh { animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
   @keyframes pop {
     0%   { transform: scale(0) translateY(-30%); opacity: 0; }
     60%  { transform: scale(1.12) translateY(0); opacity: 1; }
@@ -327,7 +318,6 @@
     background: linear-gradient(135deg, #667eea, #764ba2);
     border-color: transparent;
   }
-  button:disabled { opacity: 0.4; cursor: not-allowed; }
   .info {
     font-size: 11px;
     color: rgba(255,255,255,0.42);
@@ -338,7 +328,7 @@
     padding: 0 8px;
   }
 
-  /* ======== Modal ======== */
+  /* ============ Modal ============ */
   .modal {
     position: fixed;
     inset: 0;
@@ -373,7 +363,6 @@
   .modal-buttons { display: flex; gap: 8px; }
   .modal-buttons button { flex: 1; }
 
-  /* ======== Toast ======== */
   .toast {
     position: fixed;
     bottom: 30px;
@@ -400,54 +389,26 @@
 </head>
 <body>
 
-<!-- ====== Connect screen ====== -->
-<div id="connectScreen" class="screen" hidden>
+<div class="build-tag">build 2026-04-19c</div>
+
+<!-- ====== Waiting screen ====== -->
+<div id="waitScreen" class="screen">
   <div class="card">
     <div class="brand">立体四目</div>
     <div class="subtitle">遠隔で2人対戦</div>
-    <button class="primary" id="createBtn">ルームを作る</button>
-    <div class="or-divider">または</div>
-    <div class="join-row">
-      <input id="codeInput" placeholder="ルームコード" autocomplete="off" autocapitalize="characters" maxlength="6" inputmode="text">
-      <button id="joinBtn" style="flex:0 0 80px">参加</button>
+    <div class="loading-dots"><span></span><span></span><span></span></div>
+    <div class="wait-headline" id="waitHeadline">
+      対戦相手を待っています<span class="elapsed" id="elapsed"></span>
     </div>
-    <div class="error-text" id="connectError"></div>
+    <div class="status-line" id="statusLine">通信を準備中…</div>
+    <div class="err" id="errLine" hidden></div>
     <div class="footer-link">
       <button class="text-btn" id="offlineBtn">同じ端末で2人で遊ぶ</button>
     </div>
-    <div class="help-text">
-      ※ 別の端末・別のブラウザを使ってください<br>
-      （同じブラウザの別タブでもOK）
-    </div>
-  </div>
-</div>
-
-<!-- ====== Waiting screen ====== -->
-<div id="waitingScreen" class="screen" hidden>
-  <div class="card">
-    <div class="loading-dots"><span></span><span></span><span></span></div>
-    <div style="font-size:18px;font-weight:600;margin-bottom:6px;">
-      相手を待っています<span class="elapsed"></span>
-    </div>
-    <div class="subtitle" style="margin-bottom:0">下のコードかリンクを相手に送ってください</div>
-    <div class="room-code-display" id="roomCodeDisplay">------</div>
-    <div class="button-row">
-      <button id="copyCodeBtn">コードをコピー</button>
-      <button id="copyLinkBtn">リンクをコピー</button>
-    </div>
-    <button class="text-btn" id="cancelBtn">キャンセル</button>
-  </div>
-</div>
-
-<!-- ====== Connecting screen ====== -->
-<div id="connectingScreen" class="screen" hidden>
-  <div class="card">
-    <div class="loading-dots"><span></span><span></span><span></span></div>
-    <div style="font-size:18px;font-weight:600;">
-      接続中<span class="elapsed"></span>
-    </div>
-    <div class="subtitle" style="margin-top:8px;margin-bottom:0">最大30秒ほど待ちます…</div>
-    <button class="text-btn" id="cancelJoinBtn" style="margin-top:14px;">キャンセル</button>
+    <details class="diag">
+      <summary>うまく繋がらないとき（接続ログ）</summary>
+      <div class="log" id="log"></div>
+    </details>
   </div>
 </div>
 
@@ -487,72 +448,93 @@
 </div>
 
 <script type="module">
-import { joinRoom } from 'https://esm.run/trystero@0.21.8/mqtt';
+// ============================================================
+// IMPORT (Trystero 0.23.0, nostr strategy)
+// ============================================================
+const $ = id => document.getElementById(id);
+
+function log(msg) {
+  const t = new Date().toLocaleTimeString('ja-JP', {hour12:false});
+  const line = `[${t}] ${msg}\n`;
+  const el = $('log');
+  if (el) { el.textContent += line; el.scrollTop = el.scrollHeight; }
+  console.log('[ritai]', msg);
+}
+function setStatus(msg) { $('statusLine').textContent = msg || ''; }
+function setError(msg) {
+  const el = $('errLine');
+  if (msg) { el.textContent = msg; el.hidden = false; }
+  else { el.textContent = ''; el.hidden = true; }
+}
+
+let joinRoom, selfId;
+try {
+  setStatus('ライブラリを読み込み中…');
+  const mod = await import('https://esm.run/trystero@0.23.0/nostr');
+  joinRoom = mod.joinRoom;
+  selfId = mod.selfId;
+  log(`ライブラリ読み込み成功 (selfId: ${selfId.slice(0, 12)}…)`);
+} catch (e) {
+  log('❌ ライブラリ読込失敗: ' + (e && e.message || e));
+  setStatus('');
+  setError('ライブラリの読み込みに失敗しました。回線を確認してリロードしてください。');
+}
 
 // ============================================================
 // STATE
 // ============================================================
 let board, currentPlayer, gameOver, history, winningLine;
-let mode = null;          // 'host' | 'guest' | 'offline'
+let mode = null;          // 'online' | 'offline' | null
 let myRole = null;        // 1 (black) | 2 (white) | null
 let room = null;
 let actions = {};
 let partnerPeerId = null;
-let joinTimeout = null;
 let elapsedTimer = null;
 let elapsedSec = 0;
-let roomCode = null;
 
-const APP_ID = 'rttymk-yonmoku-2026-04';
-const $ = id => document.getElementById(id);
+// このアプリ専用のID（ホストするURLごとに固有のルームになる）
+const APP_ID = 'rttymk-yonmoku-2026-04-' + (location.host || 'local') + (location.pathname || '/');
+const ROOM_NAME = 'main';
 
 // ============================================================
-// SCREEN MANAGEMENT
+// SCREEN
 // ============================================================
-function showScreen(name) {
-  $('connectScreen').hidden  = name !== 'connect';
-  $('waitingScreen').hidden  = name !== 'waiting';
-  $('connectingScreen').hidden = name !== 'connecting';
-  $('gameScreen').hidden     = name !== 'game';
-}
-function setConnectError(msg) { $('connectError').textContent = msg || ''; }
+function showWait() { $('waitScreen').hidden = false; $('gameScreen').hidden = true; }
+function showGame() { $('waitScreen').hidden = true;  $('gameScreen').hidden = false; }
 
 function startElapsed() {
   stopElapsed();
   elapsedSec = 0;
   elapsedTimer = setInterval(() => {
     elapsedSec++;
-    document.querySelectorAll('.elapsed').forEach(el => {
-      el.textContent = ` (${elapsedSec}秒)`;
-    });
+    $('elapsed').textContent = ` (${elapsedSec}秒)`;
   }, 1000);
 }
 function stopElapsed() {
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
-  elapsedSec = 0;
-  document.querySelectorAll('.elapsed').forEach(el => el.textContent = '');
+  $('elapsed').textContent = '';
 }
 
 // ============================================================
-// ROOM CODE
+// NETWORKING
 // ============================================================
-function generateRoomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 0/O, 1/I を避ける
-  let code = '';
-  for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
+function startOnline() {
+  if (!joinRoom) return;
+  mode = 'online';
+  setError('');
+  setStatus('シグナリング中継サーバーに接続中…');
+  startElapsed();
 
-// ============================================================
-// NETWORKING (Trystero / MQTT)
-// ============================================================
-function setupRoom(code) {
-  leaveTrysteroRoom();
   try {
-    room = joinRoom({ appId: APP_ID }, code);
+    log(`joinRoom() 開始 — appId="${APP_ID}", room="${ROOM_NAME}"`);
+    room = joinRoom({ appId: APP_ID }, ROOM_NAME);
+    log('joinRoom() OK — ピア発見待機');
+    setStatus('待機中。相手が同じURLを開くと自動で繋がります。');
   } catch (e) {
-    console.error('joinRoom failed:', e);
-    return false;
+    log('❌ joinRoom 失敗: ' + (e && e.message || e));
+    setError('ネットワーク初期化に失敗しました');
+    stopElapsed();
+    return;
   }
 
   const [sendMove, onMove] = room.makeAction('move');
@@ -576,29 +558,38 @@ function setupRoom(code) {
   });
 
   room.onPeerJoin(peerId => {
-    if (partnerPeerId === null) {
-      partnerPeerId = peerId;
-      onConnected();
+    log(`✓ ピア発見: ${peerId.slice(0, 12)}…`);
+    if (partnerPeerId !== null) {
+      // すでに2人いるところに3人目が入ってきた
+      log('⚠ 既に対戦中のため新規ピアを無視');
+      return;
     }
+    partnerPeerId = peerId;
+    // 役割は selfId と peerId の比較で決定論的に決める
+    myRole = (selfId < peerId) ? 1 : 2;
+    log(`役割決定: あなたは ${myRole === 1 ? '⚫ 黒（先手）' : '⚪ 白（後手）'}`);
+    onConnected();
   });
+
   room.onPeerLeave(peerId => {
+    log(`× ピア退出: ${peerId.slice(0, 12)}…`);
     if (peerId === partnerPeerId) {
       partnerPeerId = null;
+      myRole = null;
       onDisconnected();
     }
   });
-  return true;
 }
 
-function leaveTrysteroRoom() {
-  if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
+async function leaveOnline() {
   stopElapsed();
   if (room) {
-    try { room.leave(); } catch (e) {}
+    try { await room.leave(); } catch (e) {}
     room = null;
   }
   actions = {};
   partnerPeerId = null;
+  myRole = null;
 }
 
 function send(msg) {
@@ -611,88 +602,28 @@ function send(msg) {
     } else if (msg.type === 'undo' && actions.sendUndo) {
       actions.sendUndo({ ts: Date.now() }, partnerPeerId);
     }
-  } catch (e) { console.error('send failed:', e); }
-}
-
-function createRoom() {
-  setConnectError('');
-  const code = generateRoomCode();
-  roomCode = code;
-  mode = 'host';
-  myRole = 1;
-  $('roomCodeDisplay').textContent = code;
-  showScreen('waiting');
-  startElapsed();
-  if (!setupRoom(code)) {
-    stopElapsed();
-    setConnectError('ネットワーク初期化に失敗しました');
-    showScreen('connect');
-  }
-}
-
-function joinRoomAsGuest(codeArg) {
-  setConnectError('');
-  const code = (codeArg || $('codeInput').value || '').trim().toUpperCase();
-  if (!code || code.length < 4) {
-    setConnectError('ルームコードを入力してください');
-    return;
-  }
-  roomCode = code;
-  mode = 'guest';
-  myRole = 2;
-  showScreen('connecting');
-  startElapsed();
-  if (!setupRoom(code)) {
-    stopElapsed();
-    setConnectError('ネットワーク初期化に失敗しました');
-    showScreen('connect');
-    return;
-  }
-  joinTimeout = setTimeout(() => {
-    if (partnerPeerId === null) {
-      stopElapsed();
-      leaveTrysteroRoom();
-      mode = null; myRole = null;
-      setConnectError('ルームが見つかりません。コードを確認するか、相手が「ルームを作る」を押しているか確認してください。');
-      showScreen('connect');
-    }
-  }, 30000);
-}
-
-function startOffline() {
-  leaveTrysteroRoom();
-  mode = 'offline';
-  myRole = null;
-  init();
-  $('netInfo').hidden = true;
-  showScreen('game');
-}
-
-function leaveRoom() {
-  leaveTrysteroRoom();
-  mode = null; myRole = null;
-  showScreen('connect');
+  } catch (e) { log('送信失敗: ' + e); }
 }
 
 function onConnected() {
-  if (joinTimeout) { clearTimeout(joinTimeout); joinTimeout = null; }
   stopElapsed();
   init();
   updateNetInfo(true);
-  showScreen('game');
-  const myColor = myRole === 1 ? '⚫ 黒' : '⚪ 白';
-  toast(`接続完了 — あなたは ${myColor}`, 2500);
+  showGame();
+  toast(`接続完了 — あなたは ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`, 2500);
 }
 
 function onDisconnected() {
-  if (mode === 'offline' || mode === null) return;
+  if (mode !== 'online') return;
   updateNetInfo(false);
   gameOver = true;
   render();
+  // 待機画面にも戻れるように
+  setStatus('相手が切断しました。退室するか、相手の再接続を待ってください。');
 }
 
 function updateNetInfo(connected) {
-  if (mode === 'offline' || mode === null) {
+  if (mode !== 'online') {
     $('netInfo').hidden = true;
     return;
   }
@@ -705,8 +636,25 @@ function updateNetInfo(connected) {
     ns.textContent = '⚠️ 相手が切断しました';
     ns.classList.add('disconnected');
   }
-  const myColor = myRole === 1 ? '⚫ 黒' : '⚪ 白';
-  $('myRoleDisplay').textContent = `あなた: ${myColor}`;
+  $('myRoleDisplay').textContent = `あなた: ${myRole === 1 ? '⚫ 黒' : '⚪ 白'}`;
+}
+
+async function leaveAndReturn() {
+  await leaveOnline();
+  mode = null;
+  $('netInfo').hidden = true;
+  showWait();
+  // すぐ再接続
+  startOnline();
+}
+
+function startOffline() {
+  leaveOnline();
+  mode = 'offline';
+  myRole = null;
+  init();
+  $('netInfo').hidden = true;
+  showGame();
 }
 
 // ============================================================
@@ -726,7 +674,7 @@ function init() {
 function newGameAction() {
   init();
   hideModal();
-  if (mode !== 'offline' && mode !== null) send({type:'reset'});
+  if (mode === 'online') send({type:'reset'});
 }
 
 function undoAction() { doUndo(false); }
@@ -742,12 +690,12 @@ function doUndo(fromNet) {
   currentPlayer = currentPlayer === 1 ? 2 : 1;
   render();
   updateStatus();
-  if (!fromNet && mode !== 'offline' && mode !== null) send({type:'undo'});
+  if (!fromNet && mode === 'online') send({type:'undo'});
 }
 
 function attemptDrop(row, col) {
   if (gameOver) return;
-  if (mode !== 'offline' && mode !== null) {
+  if (mode === 'online') {
     if (currentPlayer !== myRole) return;
     if (!partnerPeerId) return;
   }
@@ -775,7 +723,7 @@ function doMove(row, col, fromNet) {
         render();
         updateStatus();
       }
-      if (!fromNet && mode !== 'offline' && mode !== null) send({type:'move', row, col});
+      if (!fromNet && mode === 'online') send({type:'move', row, col});
       return;
     }
   }
@@ -830,8 +778,8 @@ function render() {
   const container = $('boards');
   container.innerHTML = '';
   const lastMove = history[history.length - 1];
-  const isMyTurn = mode === 'offline' || mode === null || currentPlayer === myRole;
-  const netReady = mode === 'offline' || mode === null || !!partnerPeerId;
+  const isMyTurn = mode === 'offline' || currentPlayer === myRole;
+  const netReady = mode === 'offline' || !!partnerPeerId;
   const canTap = !gameOver && isMyTurn && netReady;
 
   for (let l = 0; l < 4; l++) {
@@ -876,7 +824,7 @@ function updateStatus() {
   const ind = $('turnIndicator');
   const txt = $('statusText');
   ind.className = 'turn-indicator ' + (currentPlayer === 1 ? 'piece-black' : 'piece-white');
-  if (mode === 'offline' || mode === null) {
+  if (mode === 'offline') {
     txt.textContent = currentPlayer === 1 ? '黒の番' : '白の番';
   } else {
     txt.textContent = currentPlayer === myRole ? 'あなたの番' : '相手の番';
@@ -888,7 +836,7 @@ function showWinner(player) {
   const text = $('winnerText');
   piece.className = 'winner-piece ' + (player === 1 ? 'piece-black' : 'piece-white');
   piece.style.background = '';
-  if (mode === 'offline' || mode === null) {
+  if (mode === 'offline') {
     text.textContent = (player === 1 ? '黒' : '白') + 'の勝ち！';
   } else {
     text.textContent = player === myRole ? '🎉 あなたの勝ち！' : '相手の勝ち';
@@ -906,34 +854,6 @@ function showDraw() {
 
 function hideModal() { $('modal').classList.remove('show'); }
 
-// ============================================================
-// SHARE / CLIPBOARD
-// ============================================================
-function getShareUrl(code) {
-  const url = new URL(window.location.href);
-  url.searchParams.set('room', code);
-  url.hash = '';
-  return url.toString();
-}
-
-function copyText(text, successMsg) {
-  const fallback = () => {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed'; ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try { document.execCommand('copy'); toast(successMsg); }
-    catch(e) { toast('コピーに失敗しました'); }
-    document.body.removeChild(ta);
-  };
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text).then(() => toast(successMsg)).catch(fallback);
-  } else {
-    fallback();
-  }
-}
-
 function toast(msg, duration = 1800) {
   const t = document.createElement('div');
   t.className = 'toast';
@@ -949,47 +869,20 @@ function toast(msg, duration = 1800) {
 // ============================================================
 // WIRE UP
 // ============================================================
-$('createBtn').addEventListener('click', createRoom);
-$('joinBtn').addEventListener('click', () => joinRoomAsGuest());
-$('codeInput').addEventListener('keypress', e => {
-  if (e.key === 'Enter') joinRoomAsGuest();
-});
-$('codeInput').addEventListener('input', e => {
-  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
-});
 $('offlineBtn').addEventListener('click', startOffline);
-$('cancelBtn').addEventListener('click', () => {
-  leaveTrysteroRoom();
-  mode = null; myRole = null;
-  showScreen('connect');
-});
-$('cancelJoinBtn').addEventListener('click', () => {
-  leaveTrysteroRoom();
-  mode = null; myRole = null;
-  showScreen('connect');
-});
-$('copyCodeBtn').addEventListener('click', () => copyText(roomCode, 'コードをコピーしました'));
-$('copyLinkBtn').addEventListener('click', () => copyText(getShareUrl(roomCode), 'リンクをコピーしました'));
 $('newGameBtn').addEventListener('click', newGameAction);
 $('undoBtn').addEventListener('click', undoAction);
-$('leaveBtn').addEventListener('click', leaveRoom);
+$('leaveBtn').addEventListener('click', leaveAndReturn);
 $('modalNewBtn').addEventListener('click', newGameAction);
 $('modalCloseBtn').addEventListener('click', hideModal);
 $('modal').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) hideModal();
 });
-window.addEventListener('beforeunload', leaveTrysteroRoom);
+window.addEventListener('beforeunload', () => { if (room) try { room.leave(); } catch(e) {} });
 
-// Auto-join from URL ?room=XXXXXX
-const urlParams = new URLSearchParams(window.location.search);
-const roomFromUrl = urlParams.get('room');
-if (roomFromUrl) {
-  const cleaned = roomFromUrl.toUpperCase().replace(/[^A-Z2-9]/g, '').slice(0, 6);
-  $('codeInput').value = cleaned;
-  showScreen('connect');
-  setTimeout(() => joinRoomAsGuest(cleaned), 200);
-} else {
-  showScreen('connect');
+// 自動でオンライン待機を開始
+if (joinRoom) {
+  startOnline();
 }
 </script>
 </body>
