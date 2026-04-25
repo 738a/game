@@ -615,7 +615,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19o — stable id</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19p — sync timer fix</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -842,7 +842,8 @@ function saveGameState() {
       showHints: showHints,
       myId: MY_ID,
       partnerId: partnerId,  // 既知の対戦相手のID
-      timeLimitSec: timeLimitSec
+      timeLimitSec: timeLimitSec,
+      turnEndTime: turnEndTime // ★タイマー同期用に追加
     };
     localStorage.setItem(GAME_STATE_KEY, JSON.stringify(state));
   } catch (e) {}
@@ -875,7 +876,9 @@ function restoreGameState(state) {
   myRole = state.myRole;
   showHints = !!state.showHints;
   matchStarted = true;
-  if (state.timeLimitSec) timeLimitSec = state.timeLimitSec;
+  if (state.timeLimitSec !== undefined) timeLimitSec = state.timeLimitSec;
+  if (state.turnEndTime !== undefined) turnEndTime = state.turnEndTime; // ★ローカルからタイマー復元
+  
   // 既知の対戦相手のID(再接続時の判定用)
   if (state.partnerId) {
     expectedPartnerId = state.partnerId;
@@ -1103,7 +1106,6 @@ function handleStateSync(msg) {
     history = msg.history || [];
     gameOver = !!msg.gameOver;
     winningLine = msg.winningLine || null;
-    // 自分の役割は相手から見た反対
     myRole = msg.partnerRole;
     showHints = !!msg.showHints;
     if (msg.timeLimitSec !== undefined) timeLimitSec = msg.timeLimitSec;
@@ -1112,12 +1114,20 @@ function handleStateSync(msg) {
     updateNetInfo(true);
     showGame();
     render();
-    updateStatus();
-    resetTurnTimer();
+    
+    // ★ 相手の残り時間から再開する処理
+    if (msg.turnRemainMs !== undefined) {
+      turnEndTime = Date.now() + msg.turnRemainMs;
+      resumeTurnTimer();
+    } else {
+      resetTurnTimer();
+    }
+    
     toast('試合状態を同期しました', 2000);
   } else if (myCount > theirCount && matchStarted) {
     // 自分の方が新しい — 相手に送り返す
     logMsg('自分の状態を相手に送信');
+    let remain = turnEndTime > 0 ? Math.max(0, turnEndTime - Date.now()) : 0;
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1130,7 +1140,8 @@ function handleStateSync(msg) {
       myRole: myRole,
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
-      timeLimitSec: timeLimitSec
+      timeLimitSec: timeLimitSec,
+      turnRemainMs: remain  // ★ 自分の残り時間を相手に伝える
     });
   } else if (theirCount > 0 && !matchStarted) {
     // 自分は試合中じゃないが相手は試合中 → 相手の状態に合流
@@ -1148,11 +1159,17 @@ function handleStateSync(msg) {
     updateNetInfo(true);
     showGame();
     render();
-    updateStatus();
-    resetTurnTimer();
+    
+    // ★ 相手の残り時間から再開
+    if (msg.turnRemainMs !== undefined) {
+      turnEndTime = Date.now() + msg.turnRemainMs;
+      resumeTurnTimer();
+    } else {
+      resetTurnTimer();
+    }
+    
     toast('進行中の試合に参加しました', 2200);
   }
-  // myCount === theirCount の時は同期不要
 }
 
 function handleHelloMessage(fromId) {
@@ -1202,6 +1219,7 @@ function pairWith(peerId) {
   // 既に試合中(リロード復帰など)の場合は、状態を相手と同期
   if (matchStarted) {
     logMsg(`既知の試合状態あり (手数: ${history.length}) — 相手と同期`);
+    let remain = turnEndTime > 0 ? Math.max(0, turnEndTime - Date.now()) : 0;
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1214,13 +1232,13 @@ function pairWith(peerId) {
       myRole: myRole,
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
-      timeLimitSec: timeLimitSec
+      timeLimitSec: timeLimitSec,
+      turnRemainMs: remain // ★ 残り時間を同期
     });
     updateNetInfo(true);
     showGame();
     render();
-    updateStatus();
-    resetTurnTimer();
+    resumeTurnTimer(); // ★ 既存のタイマーを再開するだけにする
     toast('試合を再開しました', 2000);
     expectedPartnerId = null;  // 再会できたのでクリア
     saveGameState();  // 新しい partnerId を保存
@@ -1232,6 +1250,7 @@ function pairWith(peerId) {
   if (savedState && savedState.history && savedState.history.length > 0) {
     logMsg(`保存状態あり (手数: ${savedState.history.length}) — 復元して同期`);
     restoreGameState(savedState);
+    let remain = turnEndTime > 0 ? Math.max(0, turnEndTime - Date.now()) : 0;
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1244,13 +1263,13 @@ function pairWith(peerId) {
       myRole: myRole,
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
-      timeLimitSec: timeLimitSec
+      timeLimitSec: timeLimitSec,
+      turnRemainMs: remain // ★ 残り時間を同期
     });
     updateNetInfo(true);
     showGame();
     render();
-    updateStatus();
-    resetTurnTimer();
+    resumeTurnTimer(); // ★ 既存のタイマーを再開
     toast('試合を復帰しました', 2000);
     expectedPartnerId = null;
     saveGameState();
@@ -1410,8 +1429,7 @@ function startMatchWithRoles(myColor, myTurn, hintsAgreed, tl) {
   updateNetInfo(true);
   showGame();
   render();
-  updateStatus();
-  resetTurnTimer();
+  resetTurnTimer(); // ここは新規開始なのでフルリセット
   saveGameState();
   const hintsLabel = showHints ? ' / リーチ表示あり' : '';
   const timeLabel = timeLimitSec > 0 ? ` / ${timeLimitSec}秒制限` : '';
@@ -1495,7 +1513,7 @@ function startOffline() {
   $('netInfo').hidden = true;
   showGame();
   render();
-  updateStatus();
+  resetTurnTimer(); // オフラインも新規開始
 }
 function newGameAction() {
   if (mode === 'online') {
@@ -1505,7 +1523,7 @@ function newGameAction() {
     init();
     hideModal();
     render();
-    updateStatus();
+    resetTurnTimer();
   }
 }
 
@@ -1529,10 +1547,9 @@ function doUndo(fromNet) {
   board[last.l][last.r][last.c] = 0;
   currentPlayer = currentPlayer === 1 ? 2 : 1;
   render();
-  updateStatus();
+  resetTurnTimer(); // 手を戻した時は持ち時間をリセット
   if (!fromNet && mode === 'online') sendRaw({type:'undo', from: MY_ID});
   saveGameState();
-  resetTurnTimer();
 }
 function attemptDrop(row, col) {
   if (gameOver) return;
@@ -1561,11 +1578,10 @@ function doMove(row, col, fromNet) {
       } else {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
         render();
-        updateStatus();
       }
+      resetTurnTimer(); // 新しい手番なのでフルリセット
       if (!fromNet && mode === 'online') sendRaw({type:'move', from: MY_ID, row, col});
       saveGameState();
-      resetTurnTimer();
       if (gameOver) { clearGameState(); stopTurnTimer(); }
       return;
     }
@@ -1764,11 +1780,23 @@ function updateStatus() {
 // ============================================================
 // 時間制限タイマー
 // ============================================================
+
+// ★ 持ち時間をフルリセットして再開（新規ターン・Undo用）
 function resetTurnTimer() {
   stopTurnTimer();
   if (timeLimitSec <= 0) return;
   if (!matchStarted || gameOver) return;
   turnEndTime = Date.now() + timeLimitSec * 1000;
+  timeoutSent = false;
+  turnTimerInterval = setInterval(turnTimerTick, 250);
+  updateStatus();
+}
+
+// ★ 既存の turnEndTime を維持してタイマーを再開（通信復帰・リロード用）
+function resumeTurnTimer() {
+  stopTurnTimer();
+  if (timeLimitSec <= 0) return;
+  if (!matchStarted || gameOver) return;
   timeoutSent = false;
   turnTimerInterval = setInterval(turnTimerTick, 250);
   updateStatus();
@@ -2013,15 +2041,6 @@ function buildAxes() {
   const xColor = '#ff8fa3';
   const yColor = '#7dd3fc';
   const zColor = '#ffd86b';
-
-  // 軸の矢印 (3D の内部座標: x→X軸, z→Y軸, y→Z軸 になっている)
-  // こちらの盤座標定義:
-  //   cell(c, r, l) => position (c*cs - offset, l*cs - offset, r*cs - offset)
-  //   つまり x = c (横方向), y(3D) = l (高さ), z(3D) = r (奥行き)
-  // 盤の論理軸 (x, y, z) = (c, r, l) とする
-  //   論理x (c) → 3D の X 軸
-  //   論理y (r) → 3D の Z 軸
-  //   論理z (l) → 3D の Y 軸
 
   const axisOrigin = -offset - cellHalf - 0.3;       // x方向、z方向の原点
   const axisEnd = offset + cellHalf + 0.6;
@@ -2468,7 +2487,7 @@ if (savedAtBoot && savedAtBoot.history && savedAtBoot.history.length > 0) {
   // 接続待ちの間も試合画面を表示しておく
   showGame();
   render();
-  updateStatus();
+  resumeTurnTimer(); // ★切断中もローカルの終了時刻に向かってカウントダウンを続ける
   // 接続中の表示
   $('netInfo').hidden = false;
   $('netStatus').textContent = '🔄 再接続中…';
