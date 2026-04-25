@@ -615,7 +615,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19q — sync timer accurate</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19p — synced timer</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -701,7 +701,7 @@
       <button class="view3d-reset" id="view3dReset">視点リセット</button>
     </div>
     <canvas id="view3dCanvas"></canvas>
-    <div class="view3d-hint">ドラッグで回転・ピンチでズーム ／ <span style="color:#ff8fa3">x</span>・<span style="color:#7dd3fc">y</span>・<span style="color:#ffd86b">z</span> 軸</div>
+    <div class="view3d-hint">ドラッグで回転・ピンチでズーム ／ <span style="color:#ff8fa3"><i>x</i></span>・<span style="color:#7dd3fc"><i>y</i></span>・<span style="color:#ffd86b"><i>z</i></span> 軸</div>
   </div>
 
   <div class="controls">
@@ -798,9 +798,8 @@ let matchStarted = false;
 let showHints = myChoice.hints === 'on';
 let timeLimitSec = loadTimeLimitPref();  // 0 = 無制限
 let refreshTimePicker = null;  // setupTimePicker内で代入される
-
 let turnTimerInterval = null;
-let turnStartedAt = 0; // 追加
+let turnStartedAt = 0;
 let turnEndTime = 0;
 let timeoutSent = false;
 
@@ -843,9 +842,9 @@ function saveGameState() {
       myRole: myRole,
       showHints: showHints,
       myId: MY_ID,
-      partnerId: partnerId,  // 既知の対戦相手のID
+      partnerId: partnerId,
       timeLimitSec: timeLimitSec,
-      turnStartedAt: turnStartedAt // 追加
+      turnStartedAt: turnStartedAt
     };
     localStorage.setItem(GAME_STATE_KEY, JSON.stringify(state));
   } catch (e) {}
@@ -879,10 +878,8 @@ function restoreGameState(state) {
   showHints = !!state.showHints;
   matchStarted = true;
   if (state.timeLimitSec) timeLimitSec = state.timeLimitSec;
-  
-  turnStartedAt = state.turnStartedAt || Date.now(); // 追加
+  turnStartedAt = state.turnStartedAt || Date.now();
   turnEndTime = turnStartedAt + timeLimitSec * 1000;
-
   // 既知の対戦相手のID(再接続時の判定用)
   if (state.partnerId) {
     expectedPartnerId = state.partnerId;
@@ -1110,27 +1107,21 @@ function handleStateSync(msg) {
     history = msg.history || [];
     gameOver = !!msg.gameOver;
     winningLine = msg.winningLine || null;
+    // 自分の役割は相手から見た反対
     myRole = msg.partnerRole;
     showHints = !!msg.showHints;
     if (msg.timeLimitSec !== undefined) timeLimitSec = msg.timeLimitSec;
-    
-    // Timer sync via remainingMs or turnStartedAt fallback
-    if (msg.remainingMs !== undefined) {
-      const lag = msg.sentAt ? Math.max(0, Date.now() - msg.sentAt) : 0;
-      const adjustedRemaining = Math.max(0, msg.remainingMs - lag);
-      turnStartedAt = Date.now() - (timeLimitSec * 1000 - adjustedRemaining);
-      turnEndTime = Date.now() + adjustedRemaining;
-    } else if (msg.turnStartedAt !== undefined) {
+    if (msg.turnStartedAt !== undefined) {
       turnStartedAt = msg.turnStartedAt;
       turnEndTime = turnStartedAt + timeLimitSec * 1000;
     }
-
     matchStarted = true;
     saveGameState();
     updateNetInfo(true);
     showGame();
     render();
-    startTurnTimerFromState(); // 既存の状態からタイマー開始
+    updateStatus();
+    startTurnTimerFromState();
     toast('試合状態を同期しました', 2000);
   } else if (myCount > theirCount && matchStarted) {
     // 自分の方が新しい — 相手に送り返す
@@ -1148,9 +1139,7 @@ function handleStateSync(msg) {
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
       timeLimitSec: timeLimitSec,
-      turnStartedAt: turnStartedAt,
-      remainingMs: getRemainingMs(),
-      sentAt: Date.now()
+      turnStartedAt: turnStartedAt
     });
   } else if (theirCount > 0 && !matchStarted) {
     // 自分は試合中じゃないが相手は試合中 → 相手の状態に合流
@@ -1163,24 +1152,17 @@ function handleStateSync(msg) {
     myRole = msg.partnerRole;
     showHints = !!msg.showHints;
     if (msg.timeLimitSec !== undefined) timeLimitSec = msg.timeLimitSec;
-
-    // Timer sync
-    if (msg.remainingMs !== undefined) {
-      const lag = msg.sentAt ? Math.max(0, Date.now() - msg.sentAt) : 0;
-      const adjustedRemaining = Math.max(0, msg.remainingMs - lag);
-      turnStartedAt = Date.now() - (timeLimitSec * 1000 - adjustedRemaining);
-      turnEndTime = Date.now() + adjustedRemaining;
-    } else if (msg.turnStartedAt !== undefined) {
+    if (msg.turnStartedAt !== undefined) {
       turnStartedAt = msg.turnStartedAt;
       turnEndTime = turnStartedAt + timeLimitSec * 1000;
     }
-
     matchStarted = true;
     saveGameState();
     updateNetInfo(true);
     showGame();
     render();
-    startTurnTimerFromState(); // 既存の状態からタイマー開始
+    updateStatus();
+    startTurnTimerFromState();
     toast('進行中の試合に参加しました', 2200);
   }
   // myCount === theirCount の時は同期不要
@@ -1246,14 +1228,13 @@ function pairWith(peerId) {
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
       timeLimitSec: timeLimitSec,
-      turnStartedAt: turnStartedAt,
-      remainingMs: getRemainingMs(),
-      sentAt: Date.now()
+      turnStartedAt: turnStartedAt
     });
     updateNetInfo(true);
     showGame();
     render();
-    startTurnTimerFromState(); // 既存状態から開始
+    updateStatus();
+    startTurnTimerFromState();
     toast('試合を再開しました', 2000);
     expectedPartnerId = null;  // 再会できたのでクリア
     saveGameState();  // 新しい partnerId を保存
@@ -1278,14 +1259,13 @@ function pairWith(peerId) {
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
       timeLimitSec: timeLimitSec,
-      turnStartedAt: turnStartedAt,
-      remainingMs: getRemainingMs(),
-      sentAt: Date.now()
+      turnStartedAt: turnStartedAt
     });
     updateNetInfo(true);
     showGame();
     render();
-    startTurnTimerFromState(); // 既存状態から開始
+    updateStatus();
+    startTurnTimerFromState();
     toast('試合を復帰しました', 2000);
     expectedPartnerId = null;
     saveGameState();
@@ -1445,7 +1425,8 @@ function startMatchWithRoles(myColor, myTurn, hintsAgreed, tl) {
   updateNetInfo(true);
   showGame();
   render();
-  resetTurnTimer(); // 手番開始時はリセット
+  updateStatus();
+  resetTurnTimer();
   saveGameState();
   const hintsLabel = showHints ? ' / リーチ表示あり' : '';
   const timeLabel = timeLimitSec > 0 ? ` / ${timeLimitSec}秒制限` : '';
@@ -1529,7 +1510,7 @@ function startOffline() {
   $('netInfo').hidden = true;
   showGame();
   render();
-  resetTurnTimer();
+  updateStatus();
 }
 function newGameAction() {
   if (mode === 'online') {
@@ -1539,7 +1520,7 @@ function newGameAction() {
     init();
     hideModal();
     render();
-    resetTurnTimer();
+    updateStatus();
   }
 }
 
@@ -1563,9 +1544,10 @@ function doUndo(fromNet) {
   board[last.l][last.r][last.c] = 0;
   currentPlayer = currentPlayer === 1 ? 2 : 1;
   render();
-  resetTurnTimer(); // 手を戻した時は持ち時間をリセット
+  updateStatus();
   if (!fromNet && mode === 'online') sendRaw({type:'undo', from: MY_ID});
   saveGameState();
+  resetTurnTimer();
 }
 function attemptDrop(row, col) {
   if (gameOver) return;
@@ -1594,10 +1576,11 @@ function doMove(row, col, fromNet) {
       } else {
         currentPlayer = currentPlayer === 1 ? 2 : 1;
         render();
+        updateStatus();
       }
-      resetTurnTimer(); // 新しい手番なのでフルリセット
       if (!fromNet && mode === 'online') sendRaw({type:'move', from: MY_ID, row, col});
       saveGameState();
+      resetTurnTimer();
       if (gameOver) { clearGameState(); stopTurnTimer(); }
       return;
     }
@@ -1709,7 +1692,7 @@ function render() {
     wrap.className = 'board-container';
     const label = document.createElement('div');
     label.className = 'board-label';
-    label.innerHTML = `<span class="axis-z">z=${l+1}</span> <span style="color:rgba(255,255,255,0.4);">(${l+1}階${l === 0 ? '・一番下' : l === 3 ? '・一番上' : ''})</span>`;
+    label.innerHTML = `<span class="axis-z"><i>z</i>=${l+1}</span> <span style="color:rgba(255,255,255,0.4);">(${l+1}階${l === 0 ? '・一番下' : l === 3 ? '・一番上' : ''})</span>`;
     wrap.appendChild(label);
 
     // 座標軸付きレイアウト
@@ -1731,12 +1714,12 @@ function render() {
     }
     boardGrid.appendChild(axisTop);
 
-    // 左: y軸ラベル (1,2,3,4)
+    // 左: y軸ラベル (下から 1,2,3,4 と見えるように 上から 4,3,2,1)
     const axisLeft = document.createElement('div');
     axisLeft.className = 'axis-left';
     for (let y = 0; y < 4; y++) {
       const s = document.createElement('span');
-      s.textContent = y + 1;
+      s.textContent = 4 - y;
       axisLeft.appendChild(s);
     }
     boardGrid.appendChild(axisLeft);
@@ -1778,14 +1761,12 @@ function updateStatus() {
   const ind = $('turnIndicator');
   const txt = $('statusText');
   ind.className = 'turn-indicator ' + (currentPlayer === 1 ? 'piece-black' : 'piece-white');
-
   let base;
   if (mode === 'offline') {
     base = currentPlayer === 1 ? '黒の番' : '白の番';
   } else {
     base = currentPlayer === myRole ? 'あなたの番' : '相手の番';
   }
-
   if (timeLimitSec > 0 && matchStarted && !gameOver) {
     const remain = Math.max(0, Math.ceil(getRemainingMs() / 1000));
     const danger = remain <= 5 ? ' style="color:#ff8b8b"' : '';
@@ -1799,31 +1780,25 @@ function updateStatus() {
 // 時間制限タイマー
 // ============================================================
 function resetTurnTimer() {
-  // 新しい手番が始まったときだけ呼ぶ
+  // 新しい手番が始まったときだけ呼ぶ — turnStartedAt を「今」に更新
   turnStartedAt = Date.now();
   startTurnTimerFromState();
 }
 
 function startTurnTimerFromState() {
+  // 既存の turnStartedAt から表示を再開する(再接続/復元用)
   stopTurnTimer();
-
   if (timeLimitSec <= 0) return;
   if (!matchStarted || gameOver) return;
-
   if (!turnStartedAt) turnStartedAt = Date.now();
-
   turnEndTime = turnStartedAt + timeLimitSec * 1000;
   timeoutSent = false;
-
   turnTimerInterval = setInterval(turnTimerTick, 250);
   updateStatus();
 }
 
 function stopTurnTimer() {
-  if (turnTimerInterval) {
-    clearInterval(turnTimerInterval);
-    turnTimerInterval = null;
-  }
+  if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
 }
 
 function getRemainingMs() {
@@ -1832,19 +1807,12 @@ function getRemainingMs() {
 }
 
 function turnTimerTick() {
-  if (!matchStarted || gameOver) {
-    stopTurnTimer();
-    return;
-  }
-
-  const remain = getRemainingMs();
-
-  if (remain <= 0) {
+  if (!matchStarted || gameOver) { stopTurnTimer(); return; }
+  if (getRemainingMs() <= 0) {
     stopTurnTimer();
     onTimerExpired();
     return;
   }
-
   updateStatus();
 }
 
@@ -1919,7 +1887,7 @@ let threeAnimId = null;
 // 視点制御
 let camRotX = -0.35;  // 上下(pitch) - 少し見下ろす
 let camRotY = 0;      // 左右(yaw) - 真正面 (z=+方向から見る)
-let camDist = 12;
+let camDist = 15;
 const CAM_DIST_MIN = 6;
 const CAM_DIST_MAX = 20;
 
@@ -2042,14 +2010,14 @@ function buildLattice() {
 }
 
 // テキストをcanvasに描いてSpriteとして返す
-function makeTextSprite(text, color, size) {
+function makeTextSprite(text, color, size, italic) {
   size = size || 64;
   const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 128;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, 128, 128);
-  ctx.font = `bold ${size}px -apple-system, sans-serif`;
+  ctx.font = `${italic ? 'italic ' : ''}bold ${size}px ${italic ? 'Georgia, "Times New Roman", serif' : '-apple-system, sans-serif'}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
@@ -2072,6 +2040,15 @@ function buildAxes() {
   const yColor = '#7dd3fc';
   const zColor = '#ffd86b';
 
+  // 軸の矢印 (3D の内部座標: x→X軸, z→Y軸, y→Z軸 になっている)
+  // こちらの盤座標定義:
+  //   cell(c, r, l) => position (c*cs - offset, l*cs - offset, r*cs - offset)
+  //   つまり x = c (横方向), y(3D) = l (高さ), z(3D) = r (奥行き)
+  // 盤の論理軸 (x, y, z) = (c, r, l) とする
+  //   論理x (c) → 3D の X 軸
+  //   論理y (r) → 3D の Z 軸
+  //   論理z (l) → 3D の Y 軸
+
   const axisOrigin = -offset - cellHalf - 0.3;       // x方向、z方向の原点
   const axisEnd = offset + cellHalf + 0.6;
   const axisYOrigin = -axisOrigin;                    // y軸原点(画面手前側 = z=+)
@@ -2085,7 +2062,7 @@ function buildAxes() {
     sp.scale.set(0.6, 0.6, 1);
     threeCubeGroup.add(sp);
   }
-  const xLabel = makeTextSprite('x', xColor, 96);
+  const xLabel = makeTextSprite('x', xColor, 96, true);
   xLabel.position.set(axisEnd + 0.3, axisOrigin - 0.4, axisYOrigin + 0.3);
   xLabel.scale.set(0.8, 0.8, 1);
   threeCubeGroup.add(xLabel);
@@ -2098,7 +2075,7 @@ function buildAxes() {
     sp.scale.set(0.6, 0.6, 1);
     threeCubeGroup.add(sp);
   }
-  const yLabel = makeTextSprite('y', yColor, 96);
+  const yLabel = makeTextSprite('y', yColor, 96, true);
   yLabel.position.set(axisOrigin - 0.3, axisOrigin - 0.4, axisYEnd - 0.3);
   yLabel.scale.set(0.8, 0.8, 1);
   threeCubeGroup.add(yLabel);
@@ -2111,7 +2088,7 @@ function buildAxes() {
     sp.scale.set(0.6, 0.6, 1);
     threeCubeGroup.add(sp);
   }
-  const zLabel = makeTextSprite('z', zColor, 96);
+  const zLabel = makeTextSprite('z', zColor, 96, true);
   zLabel.position.set(axisOrigin - 0.5, axisEnd + 0.3, axisYOrigin + 0.3);
   zLabel.scale.set(0.8, 0.8, 1);
   threeCubeGroup.add(zLabel);
@@ -2371,7 +2348,7 @@ function setupInteraction(canvas) {
 function resetCamera() {
   camRotX = -0.35;
   camRotY = 0;
-  camDist = 12;
+  camDist = 15;
   applyCamera();
 }
 
@@ -2498,12 +2475,8 @@ function setupTimePicker() {
   $('timeStepUp').addEventListener('click', () => applyValue(timeLimitSec + 1, true));
   $('timeStepDown').addEventListener('click', () => applyValue(timeLimitSec - 1, true));
 }
-
-// リロード時に bye を送ると「明示的退室」と区別しづらいので送らない
-// window.addEventListener('beforeunload', () => {
-//   try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
-// });
-
+// リロードと明示退室を区別するため beforeunload では bye を送らない。
+// 退室は「退室」ボタン押下時の leaveAndReturn → leaveOnline → bye 送信のみ。
 setInterval(() => {
   if (mode === 'online' && !partnerId && mqttClient && mqttClient.connected) {
     sendRaw({type: 'hello', from: MY_ID});
@@ -2520,7 +2493,7 @@ if (savedAtBoot && savedAtBoot.history && savedAtBoot.history.length > 0) {
   // 接続待ちの間も試合画面を表示しておく
   showGame();
   render();
-  startTurnTimerFromState(); // ★切断中もローカルの絶対時刻をもとにカウントダウンを続ける
+  updateStatus();
   // 接続中の表示
   $('netInfo').hidden = false;
   $('netStatus').textContent = '🔄 再接続中…';
