@@ -615,7 +615,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19n — reconnect + time limit</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19o — stable id</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -759,8 +759,20 @@ function normalize(s) {
 const URL_KEY = normalize((location.host || 'local') + '-' + (location.pathname || '/')).slice(0, 40);
 const TOPIC = 'rttymk-yonmoku-v2-' + URL_KEY;
 logMsg(`TOPIC = "${TOPIC}"`);
-const MY_ID = Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
-logMsg(`自分のID = ${MY_ID}`);
+
+// MY_ID をlocalStorageで永続化(URLごとに別IDを持つ)
+const MY_ID_KEY = 'rttymk-my-id-' + URL_KEY;
+let MY_ID = null;
+try {
+  MY_ID = localStorage.getItem(MY_ID_KEY);
+} catch (e) {}
+if (!MY_ID) {
+  MY_ID = Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+  try { localStorage.setItem(MY_ID_KEY, MY_ID); } catch (e) {}
+  logMsg(`新しいIDを生成: ${MY_ID}`);
+} else {
+  logMsg(`保存済みIDを使用: ${MY_ID}`);
+}
 
 // ============================================================
 // STATE
@@ -769,6 +781,7 @@ let board, currentPlayer, gameOver, history, winningLine;
 let mode = null;
 let myRole = null;
 let partnerId = null;
+let expectedPartnerId = null;  // リロード復帰時に再会したい既知の相手ID
 let ws = null;
 let wsBackoff = 1000;
 let elapsedTimer = null;
@@ -828,6 +841,7 @@ function saveGameState() {
       myRole: myRole,
       showHints: showHints,
       myId: MY_ID,
+      partnerId: partnerId,  // 既知の対戦相手のID
       timeLimitSec: timeLimitSec
     };
     localStorage.setItem(GAME_STATE_KEY, JSON.stringify(state));
@@ -862,6 +876,11 @@ function restoreGameState(state) {
   showHints = !!state.showHints;
   matchStarted = true;
   if (state.timeLimitSec) timeLimitSec = state.timeLimitSec;
+  // 既知の対戦相手のID(再接続時の判定用)
+  if (state.partnerId) {
+    expectedPartnerId = state.partnerId;
+    logMsg(`既知の対戦相手ID: ${expectedPartnerId}`);
+  }
 }
 
 function showConnecting() { $('connectingBlock').hidden = false; $('setupBlock').hidden = true; }
@@ -1032,15 +1051,12 @@ function sendRaw(obj) {
 function handleMessage(msg) {
   if (!msg || !msg.from || msg.from === MY_ID) return;
   if (msg.type === 'hello') {
-    if (!partnerId) {
-      pairWith(msg.from);
-      sendRaw({type: 'hello-ack', from: MY_ID, to: msg.from});
-    }
+    handleHelloMessage(msg.from);
     return;
   }
   if (msg.type === 'hello-ack') {
     if (msg.to !== MY_ID) return;
-    if (!partnerId) pairWith(msg.from);
+    handleHelloAckMessage(msg.from);
     return;
   }
   if (msg.type === 'ping') {
@@ -1139,16 +1155,53 @@ function handleStateSync(msg) {
   // myCount === theirCount の時は同期不要
 }
 
+function handleHelloMessage(fromId) {
+  // 既に試合中で、相手のIDが既知の場合
+  if (matchStarted && expectedPartnerId === fromId) {
+    logMsg(`✓ 既知の相手から HELLO 受信: ${fromId}`);
+    pairWith(fromId);
+    sendRaw({type: 'hello-ack', from: MY_ID, to: fromId});
+    return;
+  }
+  // 既に別の相手とペア成立済みなら無視
+  if (partnerId && partnerId !== fromId) {
+    logMsg(`⚠ 別の相手と既にペア中のため無視: ${fromId}`);
+    return;
+  }
+  // 既に同じ相手とペア成立中なら hello-ack だけ返す
+  if (partnerId === fromId) {
+    sendRaw({type: 'hello-ack', from: MY_ID, to: fromId});
+    return;
+  }
+  // 自分が試合中でないなら、相手が誰でも受け入れる(新規対戦)
+  // 自分が試合中(matchStarted)で expectedPartnerId と違うIDならガード
+  if (matchStarted && expectedPartnerId && expectedPartnerId !== fromId) {
+    logMsg(`⚠ 復帰待機中: 既知のIDではないので無視 (期待:${expectedPartnerId} / 来訪:${fromId})`);
+    return;
+  }
+  // 新規ペアリング
+  pairWith(fromId);
+  sendRaw({type: 'hello-ack', from: MY_ID, to: fromId});
+}
+
+function handleHelloAckMessage(fromId) {
+  if (partnerId) return;
+  // 既知の相手か確認
+  if (matchStarted && expectedPartnerId && expectedPartnerId !== fromId) {
+    logMsg(`⚠ 復帰待機中: 既知のIDではない hello-ack を無視`);
+    return;
+  }
+  pairWith(fromId);
+}
+
 function pairWith(peerId) {
   partnerId = peerId;
   lastHeartbeatFromPartner = Date.now();
-  logMsg(`✓ ピア確定`);
+  logMsg(`✓ ピア確定: ${peerId}`);
+
   // 既に試合中(リロード復帰など)の場合は、状態を相手と同期
-  const savedState = loadGameState();
-  if (savedState && savedState.history && savedState.history.length > 0) {
-    logMsg(`保存状態あり (手数: ${savedState.history.length}) — 相手と同期`);
-    restoreGameState(savedState);
-    // 自分のstate要約を相手に送って整合性確認
+  if (matchStarted) {
+    logMsg(`既知の試合状態あり (手数: ${history.length}) — 相手と同期`);
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1163,26 +1216,61 @@ function pairWith(peerId) {
       showHints: showHints,
       timeLimitSec: timeLimitSec
     });
-    // 試合画面復帰
+    updateNetInfo(true);
+    showGame();
+    render();
+    updateStatus();
+    resetTurnTimer();
+    toast('試合を再開しました', 2000);
+    expectedPartnerId = null;  // 再会できたのでクリア
+    saveGameState();  // 新しい partnerId を保存
+    return;
+  }
+
+  // 試合中じゃないが、保存データがある場合(別経路の復帰)
+  const savedState = loadGameState();
+  if (savedState && savedState.history && savedState.history.length > 0) {
+    logMsg(`保存状態あり (手数: ${savedState.history.length}) — 復元して同期`);
+    restoreGameState(savedState);
+    sendRaw({
+      type: 'state-sync',
+      from: MY_ID,
+      moveCount: history.length,
+      board: board,
+      currentPlayer: currentPlayer,
+      history: history,
+      gameOver: gameOver,
+      winningLine: winningLine,
+      myRole: myRole,
+      partnerRole: myRole === 1 ? 2 : 1,
+      showHints: showHints,
+      timeLimitSec: timeLimitSec
+    });
     updateNetInfo(true);
     showGame();
     render();
     updateStatus();
     resetTurnTimer();
     toast('試合を復帰しました', 2000);
-  } else {
-    onConnected();
+    expectedPartnerId = null;
+    saveGameState();
+    return;
   }
+
+  // 新規対戦 — セットアップ画面へ
+  onConnected();
 }
 
 function handlePartnerLeave() {
   if (!partnerId) return;
   logMsg('× 相手退出');
+  const wasPartner = partnerId;
   partnerId = null;
 
   if (matchStarted && !gameOver) {
     // 試合中の切断 — 状態は保持して再接続を待つ
     logMsg('試合中の切断のため状態を保持(再接続待ち)');
+    expectedPartnerId = wasPartner;  // 相手のIDを記憶
     saveGameState();
     updateNetInfo(false);
     setStatus('相手が一時的に切断しました。再接続を待っています…');
@@ -1190,6 +1278,7 @@ function handlePartnerLeave() {
   }
 
   // 試合が始まってないか、終わっている場合のみ完全リセット
+  expectedPartnerId = null;
   myRole = null;
   partnerChoice = { color: null, turn: null, hints: null };
   partnerStartPressed = false;
@@ -1332,6 +1421,7 @@ function startMatchWithRoles(myColor, myTurn, hintsAgreed, tl) {
 function resetToSetup() {
   stopTurnTimer();
   clearGameState();
+  expectedPartnerId = null;
   myChoice = { color: null, turn: null, hints: loadHintsPref() };
   partnerChoice = { color: null, turn: null, hints: null };
   myStartPressed = false;
@@ -1372,6 +1462,7 @@ function leaveOnline() {
   stopTurnTimer();
   clearTimeout(reconnectTimer);
   partnerId = null;
+  expectedPartnerId = null;
   myRole = null;
   myChoice = { color: null, turn: null, hints: loadHintsPref() };
   partnerChoice = { color: null, turn: null, hints: null };
