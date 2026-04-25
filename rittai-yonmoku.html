@@ -615,7 +615,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-19p — sync timer fix</div>
+<div class="build-banner" id="buildBanner">build 2026-04-19q — sync timer accurate</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -798,7 +798,9 @@ let matchStarted = false;
 let showHints = myChoice.hints === 'on';
 let timeLimitSec = loadTimeLimitPref();  // 0 = 無制限
 let refreshTimePicker = null;  // setupTimePicker内で代入される
+
 let turnTimerInterval = null;
+let turnStartedAt = 0; // 追加
 let turnEndTime = 0;
 let timeoutSent = false;
 
@@ -843,7 +845,7 @@ function saveGameState() {
       myId: MY_ID,
       partnerId: partnerId,  // 既知の対戦相手のID
       timeLimitSec: timeLimitSec,
-      turnEndTime: turnEndTime // ★タイマー同期用に追加
+      turnStartedAt: turnStartedAt // 追加
     };
     localStorage.setItem(GAME_STATE_KEY, JSON.stringify(state));
   } catch (e) {}
@@ -876,9 +878,11 @@ function restoreGameState(state) {
   myRole = state.myRole;
   showHints = !!state.showHints;
   matchStarted = true;
-  if (state.timeLimitSec !== undefined) timeLimitSec = state.timeLimitSec;
-  if (state.turnEndTime !== undefined) turnEndTime = state.turnEndTime; // ★ローカルからタイマー復元
+  if (state.timeLimitSec) timeLimitSec = state.timeLimitSec;
   
+  turnStartedAt = state.turnStartedAt || Date.now(); // 追加
+  turnEndTime = turnStartedAt + timeLimitSec * 1000;
+
   // 既知の対戦相手のID(再接続時の判定用)
   if (state.partnerId) {
     expectedPartnerId = state.partnerId;
@@ -1109,25 +1113,28 @@ function handleStateSync(msg) {
     myRole = msg.partnerRole;
     showHints = !!msg.showHints;
     if (msg.timeLimitSec !== undefined) timeLimitSec = msg.timeLimitSec;
+    
+    // Timer sync via remainingMs or turnStartedAt fallback
+    if (msg.remainingMs !== undefined) {
+      const lag = msg.sentAt ? Math.max(0, Date.now() - msg.sentAt) : 0;
+      const adjustedRemaining = Math.max(0, msg.remainingMs - lag);
+      turnStartedAt = Date.now() - (timeLimitSec * 1000 - adjustedRemaining);
+      turnEndTime = Date.now() + adjustedRemaining;
+    } else if (msg.turnStartedAt !== undefined) {
+      turnStartedAt = msg.turnStartedAt;
+      turnEndTime = turnStartedAt + timeLimitSec * 1000;
+    }
+
     matchStarted = true;
     saveGameState();
     updateNetInfo(true);
     showGame();
     render();
-    
-    // ★ 相手の残り時間から再開する処理
-    if (msg.turnRemainMs !== undefined) {
-      turnEndTime = Date.now() + msg.turnRemainMs;
-      resumeTurnTimer();
-    } else {
-      resetTurnTimer();
-    }
-    
+    startTurnTimerFromState(); // 既存の状態からタイマー開始
     toast('試合状態を同期しました', 2000);
   } else if (myCount > theirCount && matchStarted) {
     // 自分の方が新しい — 相手に送り返す
     logMsg('自分の状態を相手に送信');
-    let remain = turnEndTime > 0 ? Math.max(0, turnEndTime - Date.now()) : 0;
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1141,7 +1148,9 @@ function handleStateSync(msg) {
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
       timeLimitSec: timeLimitSec,
-      turnRemainMs: remain  // ★ 自分の残り時間を相手に伝える
+      turnStartedAt: turnStartedAt,
+      remainingMs: getRemainingMs(),
+      sentAt: Date.now()
     });
   } else if (theirCount > 0 && !matchStarted) {
     // 自分は試合中じゃないが相手は試合中 → 相手の状態に合流
@@ -1154,22 +1163,27 @@ function handleStateSync(msg) {
     myRole = msg.partnerRole;
     showHints = !!msg.showHints;
     if (msg.timeLimitSec !== undefined) timeLimitSec = msg.timeLimitSec;
+
+    // Timer sync
+    if (msg.remainingMs !== undefined) {
+      const lag = msg.sentAt ? Math.max(0, Date.now() - msg.sentAt) : 0;
+      const adjustedRemaining = Math.max(0, msg.remainingMs - lag);
+      turnStartedAt = Date.now() - (timeLimitSec * 1000 - adjustedRemaining);
+      turnEndTime = Date.now() + adjustedRemaining;
+    } else if (msg.turnStartedAt !== undefined) {
+      turnStartedAt = msg.turnStartedAt;
+      turnEndTime = turnStartedAt + timeLimitSec * 1000;
+    }
+
     matchStarted = true;
     saveGameState();
     updateNetInfo(true);
     showGame();
     render();
-    
-    // ★ 相手の残り時間から再開
-    if (msg.turnRemainMs !== undefined) {
-      turnEndTime = Date.now() + msg.turnRemainMs;
-      resumeTurnTimer();
-    } else {
-      resetTurnTimer();
-    }
-    
+    startTurnTimerFromState(); // 既存の状態からタイマー開始
     toast('進行中の試合に参加しました', 2200);
   }
+  // myCount === theirCount の時は同期不要
 }
 
 function handleHelloMessage(fromId) {
@@ -1219,7 +1233,6 @@ function pairWith(peerId) {
   // 既に試合中(リロード復帰など)の場合は、状態を相手と同期
   if (matchStarted) {
     logMsg(`既知の試合状態あり (手数: ${history.length}) — 相手と同期`);
-    let remain = turnEndTime > 0 ? Math.max(0, turnEndTime - Date.now()) : 0;
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1233,12 +1246,14 @@ function pairWith(peerId) {
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
       timeLimitSec: timeLimitSec,
-      turnRemainMs: remain // ★ 残り時間を同期
+      turnStartedAt: turnStartedAt,
+      remainingMs: getRemainingMs(),
+      sentAt: Date.now()
     });
     updateNetInfo(true);
     showGame();
     render();
-    resumeTurnTimer(); // ★ 既存のタイマーを再開するだけにする
+    startTurnTimerFromState(); // 既存状態から開始
     toast('試合を再開しました', 2000);
     expectedPartnerId = null;  // 再会できたのでクリア
     saveGameState();  // 新しい partnerId を保存
@@ -1250,7 +1265,6 @@ function pairWith(peerId) {
   if (savedState && savedState.history && savedState.history.length > 0) {
     logMsg(`保存状態あり (手数: ${savedState.history.length}) — 復元して同期`);
     restoreGameState(savedState);
-    let remain = turnEndTime > 0 ? Math.max(0, turnEndTime - Date.now()) : 0;
     sendRaw({
       type: 'state-sync',
       from: MY_ID,
@@ -1264,12 +1278,14 @@ function pairWith(peerId) {
       partnerRole: myRole === 1 ? 2 : 1,
       showHints: showHints,
       timeLimitSec: timeLimitSec,
-      turnRemainMs: remain // ★ 残り時間を同期
+      turnStartedAt: turnStartedAt,
+      remainingMs: getRemainingMs(),
+      sentAt: Date.now()
     });
     updateNetInfo(true);
     showGame();
     render();
-    resumeTurnTimer(); // ★ 既存のタイマーを再開
+    startTurnTimerFromState(); // 既存状態から開始
     toast('試合を復帰しました', 2000);
     expectedPartnerId = null;
     saveGameState();
@@ -1429,7 +1445,7 @@ function startMatchWithRoles(myColor, myTurn, hintsAgreed, tl) {
   updateNetInfo(true);
   showGame();
   render();
-  resetTurnTimer(); // ここは新規開始なのでフルリセット
+  resetTurnTimer(); // 手番開始時はリセット
   saveGameState();
   const hintsLabel = showHints ? ' / リーチ表示あり' : '';
   const timeLabel = timeLimitSec > 0 ? ` / ${timeLimitSec}秒制限` : '';
@@ -1513,7 +1529,7 @@ function startOffline() {
   $('netInfo').hidden = true;
   showGame();
   render();
-  resetTurnTimer(); // オフラインも新規開始
+  resetTurnTimer();
 }
 function newGameAction() {
   if (mode === 'online') {
@@ -1762,14 +1778,16 @@ function updateStatus() {
   const ind = $('turnIndicator');
   const txt = $('statusText');
   ind.className = 'turn-indicator ' + (currentPlayer === 1 ? 'piece-black' : 'piece-white');
+
   let base;
   if (mode === 'offline') {
     base = currentPlayer === 1 ? '黒の番' : '白の番';
   } else {
     base = currentPlayer === myRole ? 'あなたの番' : '相手の番';
   }
+
   if (timeLimitSec > 0 && matchStarted && !gameOver) {
-    const remain = Math.max(0, Math.ceil((turnEndTime - Date.now()) / 1000));
+    const remain = Math.max(0, Math.ceil(getRemainingMs() / 1000));
     const danger = remain <= 5 ? ' style="color:#ff8b8b"' : '';
     txt.innerHTML = `${base} <span${danger}>(${remain}秒)</span>`;
   } else {
@@ -1780,41 +1798,53 @@ function updateStatus() {
 // ============================================================
 // 時間制限タイマー
 // ============================================================
-
-// ★ 持ち時間をフルリセットして再開（新規ターン・Undo用）
 function resetTurnTimer() {
-  stopTurnTimer();
-  if (timeLimitSec <= 0) return;
-  if (!matchStarted || gameOver) return;
-  turnEndTime = Date.now() + timeLimitSec * 1000;
-  timeoutSent = false;
-  turnTimerInterval = setInterval(turnTimerTick, 250);
-  updateStatus();
+  // 新しい手番が始まったときだけ呼ぶ
+  turnStartedAt = Date.now();
+  startTurnTimerFromState();
 }
 
-// ★ 既存の turnEndTime を維持してタイマーを再開（通信復帰・リロード用）
-function resumeTurnTimer() {
+function startTurnTimerFromState() {
   stopTurnTimer();
+
   if (timeLimitSec <= 0) return;
   if (!matchStarted || gameOver) return;
+
+  if (!turnStartedAt) turnStartedAt = Date.now();
+
+  turnEndTime = turnStartedAt + timeLimitSec * 1000;
   timeoutSent = false;
+
   turnTimerInterval = setInterval(turnTimerTick, 250);
   updateStatus();
 }
 
 function stopTurnTimer() {
-  if (turnTimerInterval) { clearInterval(turnTimerInterval); turnTimerInterval = null; }
+  if (turnTimerInterval) {
+    clearInterval(turnTimerInterval);
+    turnTimerInterval = null;
+  }
+}
+
+function getRemainingMs() {
+  if (timeLimitSec <= 0 || !turnStartedAt) return 0;
+  return Math.max(0, turnStartedAt + timeLimitSec * 1000 - Date.now());
 }
 
 function turnTimerTick() {
-  if (!matchStarted || gameOver) { stopTurnTimer(); return; }
-  const remain = turnEndTime - Date.now();
+  if (!matchStarted || gameOver) {
+    stopTurnTimer();
+    return;
+  }
+
+  const remain = getRemainingMs();
+
   if (remain <= 0) {
     stopTurnTimer();
     onTimerExpired();
     return;
   }
-  // 1秒未満の表示更新
+
   updateStatus();
 }
 
@@ -2468,9 +2498,12 @@ function setupTimePicker() {
   $('timeStepUp').addEventListener('click', () => applyValue(timeLimitSec + 1, true));
   $('timeStepDown').addEventListener('click', () => applyValue(timeLimitSec - 1, true));
 }
-window.addEventListener('beforeunload', () => {
-  try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
-});
+
+// リロード時に bye を送ると「明示的退室」と区別しづらいので送らない
+// window.addEventListener('beforeunload', () => {
+//   try { sendRaw({type: 'bye', from: MY_ID}); } catch(e) {}
+// });
+
 setInterval(() => {
   if (mode === 'online' && !partnerId && mqttClient && mqttClient.connected) {
     sendRaw({type: 'hello', from: MY_ID});
@@ -2487,7 +2520,7 @@ if (savedAtBoot && savedAtBoot.history && savedAtBoot.history.length > 0) {
   // 接続待ちの間も試合画面を表示しておく
   showGame();
   render();
-  resumeTurnTimer(); // ★切断中もローカルの終了時刻に向かってカウントダウンを続ける
+  startTurnTimerFromState(); // ★切断中もローカルの絶対時刻をもとにカウントダウンを続ける
   // 接続中の表示
   $('netInfo').hidden = false;
   $('netStatus').textContent = '🔄 再接続中…';
