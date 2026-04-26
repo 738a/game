@@ -636,7 +636,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-26b — TeX font</div>
+<div class="build-banner" id="buildBanner">build 2026-04-26c — default view fix</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -1912,7 +1912,7 @@ let threeAnimId = null;
 
 // 視点制御
 let camRotX = -0.45;  // 上下(pitch) - 軽く見下ろす
-let camRotY = 0;      // 左右(yaw) - 真正面 (z=+方向から見る)
+let camRotY = 0.55;   // 左右(yaw) - 右に少し回転
 let camDist = 15;
 const CAM_DIST_MIN = 6;
 const CAM_DIST_MAX = 20;
@@ -2423,7 +2423,7 @@ function setupInteraction(canvas) {
 
 function resetCamera() {
   camRotX = -0.45;
-  camRotY = 0;
+  camRotY = 0.55;
   camDist = 15;
   applyCamera();
 }
