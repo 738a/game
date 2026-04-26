@@ -10,6 +10,19 @@
 <meta http-equiv="Expires" content="0">
 <title>立体四目</title>
 <style>
+  /* TeX の $x, y, z$ と同じフォント (KaTeX Math Italic = Computer Modern 系) */
+  @font-face {
+    font-family: 'KaTeX_Math';
+    src: url('https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/fonts/KaTeX_Math-Italic.woff2') format('woff2');
+    font-weight: normal;
+    font-style: italic;
+    font-display: swap;
+  }
+  .tex-var {
+    font-family: 'KaTeX_Math', 'Latin Modern Math', 'STIX Two Math', 'Cambria Math', Georgia, "Times New Roman", serif;
+    font-style: italic;
+    font-weight: normal;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   *, *::before, *::after {
     -webkit-tap-highlight-color: transparent;
@@ -389,12 +402,13 @@
   }
   .board-label .axis-z {
     color: #ffd86b;
-    font-family: Georgia, "Times New Roman", serif;
+    font-family: 'KaTeX_Math', 'Latin Modern Math', Georgia, "Times New Roman", serif;
     font-style: italic;
-    font-size: 13px;
+    font-size: 14px;
+    font-weight: normal;
   }
   .board-label .axis-z i {
-    font-style: italic;  /* 既にイタリックだが念のため */
+    font-style: italic;
   }
   /* 盤を 行見出し(y軸) + 4x4 グリッド に分けて配置 */
   .board-grid {
@@ -409,9 +423,9 @@
     display: grid;
     gap: 4px;
     color: rgba(255,255,255,0.5);
-    font-size: 11px;
-    font-weight: 700;
-    font-family: Georgia, "Times New Roman", serif;
+    font-size: 12px;
+    font-weight: normal;
+    font-family: 'KaTeX_Math', 'Latin Modern Math', Georgia, "Times New Roman", serif;
     font-style: italic;
   }
   .axis-top {
@@ -622,7 +636,7 @@
 </head>
 <body>
 
-<div class="build-banner" id="buildBanner">build 2026-04-26 — top-down view + 5s steps</div>
+<div class="build-banner" id="buildBanner">build 2026-04-26b — TeX font</div>
 
 <div id="waitScreen" class="screen">
   <div class="card">
@@ -708,7 +722,7 @@
       <button class="view3d-reset" id="view3dReset">視点リセット</button>
     </div>
     <canvas id="view3dCanvas"></canvas>
-    <div class="view3d-hint">ドラッグで回転・ピンチでズーム ／ <span style="color:#ff8fa3"><i>x</i></span>・<span style="color:#7dd3fc"><i>y</i></span>・<span style="color:#ffd86b"><i>z</i></span> 軸</div>
+    <div class="view3d-hint">ドラッグで回転・ピンチでズーム ／ <span class="tex-var" style="color:#ff8fa3">x</span>・<span class="tex-var" style="color:#7dd3fc">y</span>・<span class="tex-var" style="color:#ffd86b">z</span> 軸</div>
   </div>
 
   <div class="controls">
@@ -1897,11 +1911,56 @@ let threeInitialized = false;
 let threeAnimId = null;
 
 // 視点制御
-let camRotX = -0.85;  // 上下(pitch) - 上からかなり見下ろす
+let camRotX = -0.45;  // 上下(pitch) - 軽く見下ろす
 let camRotY = 0;      // 左右(yaw) - 真正面 (z=+方向から見る)
 let camDist = 15;
 const CAM_DIST_MIN = 6;
 const CAM_DIST_MAX = 20;
+
+// KaTeX_Math フォントのロード(3Dラベル用)。失敗してもフォールバック描画
+let texFontReady = false;
+if (document.fonts && document.fonts.load) {
+  document.fonts.load('italic 64px "KaTeX_Math"').then(() => {
+    texFontReady = true;
+    // 既に3D初期化済みなら再描画
+    if (threeInitialized) rebuild3DLabels();
+  }).catch(() => {
+    texFontReady = true;  // ロード失敗してもフォールバックフォントで描画
+    if (threeInitialized) rebuild3DLabels();
+  });
+} else {
+  texFontReady = true;
+}
+
+function rebuild3DLabels() {
+  // 3D軸ラベル(Sprite)だけ再構築するのは面倒なので、buildAxes部分を再呼出し
+  // 一番手軽なのは threeCubeGroup の中の Sprite と AxisLine 系を全て削除して buildLattice/buildAxes しなおす
+  // ただし駒/リーチは update3D() で毎回再構築するので Group 自体はそのまま
+  // → buildAxes の対象スプライトを抽出して再描画する
+  if (!threeInitialized) return;
+  // すべての軸関連オブジェクトを削除して buildAxes を呼び直す
+  // threeCubeGroup の中で Sprite と LineSegments(軸線) と Mesh(コーン)を削除
+  const toRemove = [];
+  threeCubeGroup.children.forEach(obj => {
+    if (obj.isSprite) toRemove.push(obj);
+    else if (obj.isMesh && obj.geometry && obj.geometry.type === 'ConeGeometry') toRemove.push(obj);
+    // 軸線(色がx/y/z軸の色のもの)も削除
+    else if (obj.isLineSegments && obj.material && (
+      obj.material.color.getHex() === 0xff8fa3 ||
+      obj.material.color.getHex() === 0x7dd3fc ||
+      obj.material.color.getHex() === 0xffd86b
+    )) toRemove.push(obj);
+  });
+  toRemove.forEach(obj => {
+    threeCubeGroup.remove(obj);
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      if (obj.material.map) obj.material.map.dispose();
+      obj.material.dispose();
+    }
+  });
+  buildAxes();
+}
 
 function initOrResize3D() {
   if ($('gameScreen').hidden) return;
@@ -2029,7 +2088,12 @@ function makeTextSprite(text, color, size, italic) {
   canvas.height = 128;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, 128, 128);
-  ctx.font = `${italic ? 'italic ' : ''}bold ${size}px ${italic ? 'Georgia, "Times New Roman", serif' : '-apple-system, sans-serif'}`;
+  if (italic) {
+    // TeXのxyzと同じ KaTeX_Math フォント (Computer Modern系)
+    ctx.font = `italic ${size}px "KaTeX_Math", "Latin Modern Math", Georgia, "Times New Roman", serif`;
+  } else {
+    ctx.font = `bold ${size}px -apple-system, sans-serif`;
+  }
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
@@ -2358,7 +2422,7 @@ function setupInteraction(canvas) {
 }
 
 function resetCamera() {
-  camRotX = -0.85;
+  camRotX = -0.45;
   camRotY = 0;
   camDist = 15;
   applyCamera();
